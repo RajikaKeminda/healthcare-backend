@@ -4,7 +4,7 @@ const Appointment = require('../models/Appointment');
 const HealthcareProfessional = require('../models/HealthcareProfessional');
 const Hospital = require('../models/Hospital');
 const { verifyToken, authorize, authorizeResource } = require('../middleware/auth');
-
+const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
 // Get all appointments with filtering and pagination
@@ -224,6 +224,7 @@ router.post('/', verifyToken, authorize('patient'), [
 
     // Create appointment
     const appointment = new Appointment({
+      appointmentID: uuidv4(),
       patientID: req.user._id,
       doctorID,
       hospitalID,

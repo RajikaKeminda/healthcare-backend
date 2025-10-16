@@ -3,6 +3,7 @@ const { body, validationResult, query } = require('express-validator');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { v4: uuidv4 } = require('uuid');
 const MedicalRecord = require('../models/MedicalRecord');
 const { verifyToken, authorize, authorizeResource } = require('../middleware/auth');
 
@@ -144,8 +145,10 @@ router.post('/', verifyToken, authorize('healthcare_professional'), [
       });
     }
 
+    const recordID = uuidv4();
     const medicalRecordData = {
       ...req.body,
+      recordID,
       doctorID: req.user._id,
       visitDate: req.body.visitDate || new Date()
     };

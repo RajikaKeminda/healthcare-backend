@@ -6,7 +6,7 @@ const HealthcareProfessional = require('../models/HealthcareProfessional');
 const HospitalStaff = require('../models/HospitalStaff');
 const { verifyToken, authorize } = require('../middleware/auth');
 const { body, param, query, validationResult } = require('express-validator');
-
+const { v4: uuidv4 } = require('uuid');
 // GET /api/users
 // Optional query params: role, search, page, limit, sortBy, sortOrder
 router.get('/', verifyToken, async function(req, res) {
@@ -127,17 +127,24 @@ router.post(
       let userDoc;
       switch (role) {
         case 'patient':
-          userDoc = new Patient({ ...base, role: 'patient' });
+          const patientID = uuidv4();
+          userDoc = new Patient({ ...base, role: 'patient', patientID });
           break;
         case 'healthcare_professional':
-          userDoc = new HealthcareProfessional({ ...base, role: 'healthcare_professional' });
+          const professionalID = uuidv4();
+          userDoc = new HealthcareProfessional({ ...base, role: 'healthcare_professional', professionalID });
           break;
         case 'hospital_staff':
-          userDoc = new HospitalStaff({ ...base, role: 'hospital_staff' });
+          const staffID = uuidv4();
+          userDoc = new HospitalStaff({ ...base, role: 'hospital_staff', staffID });
           break;
         case 'healthcare_manager':
+          const managerID = uuidv4();
+          userDoc = new User({ ...base, role: 'healthcare_manager', managerID });
+          break;
         default:
-          userDoc = new User({ ...base, role: 'healthcare_manager' });
+          const userID = uuidv4();
+          userDoc = new User({ ...base, role: 'user', userID });
       }
 
       await userDoc.save();

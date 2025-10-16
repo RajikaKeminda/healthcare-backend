@@ -8,7 +8,7 @@ const paymentSchema = new mongoose.Schema({
   },
   patientID: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Patient',
+    ref: 'User',
     required: [true, 'Patient ID is required']
   },
   appointmentID: {

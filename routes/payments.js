@@ -3,7 +3,7 @@ const { body, validationResult, query } = require('express-validator');
 const Payment = require('../models/Payment');
 const Appointment = require('../models/Appointment');
 const { verifyToken, authorize } = require('../middleware/auth');
-
+const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
 // Simulate payment gateway
@@ -119,11 +119,15 @@ router.post('/', verifyToken, [
       });
     }
 
-    const { appointmentID, hospitalID, amount, method, billingDetails, insuranceInfo } = req.body;
+    const { appointmentID, hospitalID, amount, method, billingDetails, insuranceInfo, patientID } = req.body;
 
+    const paymentID = uuidv4();
+    const _patientID = patientID || req.user._id;
+    
     // Create payment record
     const payment = new Payment({
-      patientID: req.user._id,
+      paymentID,
+      patientID: _patientID,
       appointmentID,
       hospitalID,
       amount,
@@ -210,6 +214,61 @@ router.post('/', verifyToken, [
     res.status(500).json({
       success: false,
       message: 'Server error while processing payment',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Update payment (for staff to process payments)
+router.put('/:paymentID', verifyToken, authorize('hospital_staff', 'healthcare_manager'), [
+  body('status').optional().isIn(['pending', 'processing', 'completed', 'failed', 'cancelled']),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { paymentID } = req.params;
+    const updates = req.body;
+
+    const payment = await Payment.findById(paymentID);
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payment not found'
+      });
+    }
+
+    Object.keys(updates).forEach(key => {
+      payment[key] = updates[key];
+    });
+
+    if (updates.status === 'completed') {
+      payment.processedBy = req.user._id;
+    }
+
+    await payment.save();
+
+    await payment.populate('patientID', 'userName email phone');
+    await payment.populate('appointmentID', 'appointmentID date time');
+    await payment.populate('hospitalID', 'name address');
+
+    res.json({
+      success: true,
+      message: 'Payment updated successfully',
+      data: { payment }
+    });
+
+  } catch (error) {
+    console.error('Update payment error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating payment',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

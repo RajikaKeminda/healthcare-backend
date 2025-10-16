@@ -8,12 +8,12 @@ const appointmentSchema = new mongoose.Schema({
   },
   patientID: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Patient',
+    ref: 'User',
     required: [true, 'Patient ID is required']
   },
   doctorID: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'HealthcareProfessional',
+    ref: 'User',
     required: [true, 'Doctor ID is required']
   },
   hospitalID: {
