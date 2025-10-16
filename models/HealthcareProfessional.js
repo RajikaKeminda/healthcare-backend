@@ -73,7 +73,12 @@ const healthcareProfessionalSchema = new mongoose.Schema({
   languages: [{
     type: String,
     default: ['English']
-  }]
+  }],
+  hospitalID: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hospital',
+    required: false
+  }
 });
 
 // Generate professional ID before saving

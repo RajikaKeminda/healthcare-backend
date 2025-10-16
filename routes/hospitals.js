@@ -3,7 +3,7 @@ const { body, validationResult, query } = require('express-validator');
 const Hospital = require('../models/Hospital');
 const HealthcareProfessional = require('../models/HealthcareProfessional');
 const { verifyToken, authorize } = require('../middleware/auth');
-
+const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
 // Get all hospitals
@@ -177,7 +177,8 @@ router.post('/', verifyToken, authorize('healthcare_manager'), [
       });
     }
 
-    const hospital = new Hospital(req.body);
+    const hospitalID = uuidv4();
+    const hospital = new Hospital({ ...req.body, hospitalID });
     await hospital.save();
 
     res.status(201).json({
