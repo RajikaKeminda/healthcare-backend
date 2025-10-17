@@ -1,0 +1,260 @@
+const Appointment = require('../../../models/Appointment');
+const { createTestUser, createTestHospital } = require('../../utils/testHelpers');
+
+require('../../setup');
+
+describe('Appointment Model', () => {
+  let patient, doctor, hospital;
+
+  beforeEach(async () => {
+    patient = await createTestUser('patient');
+    doctor = await createTestUser('healthcare_professional');
+    hospital = await createTestHospital();
+  });
+
+  describe('Appointment Creation', () => {
+    it('should create a valid appointment with required fields', async () => {
+      const appointmentData = {
+        appointmentID: 'APT001',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'consultation',
+        status: 'scheduled',
+      };
+
+      const appointment = await Appointment.create(appointmentData);
+
+      expect(appointment).toBeDefined();
+      expect(appointment.appointmentID).toBe('APT001');
+      expect(appointment.patientID.toString()).toBe(patient._id.toString());
+      expect(appointment.doctorID.toString()).toBe(doctor._id.toString());
+      expect(appointment.hospitalID.toString()).toBe(hospital._id.toString());
+      expect(appointment.type).toBe('consultation');
+      expect(appointment.status).toBe('scheduled');
+    });
+
+    it('should fail without required fields', async () => {
+      const appointmentData = {
+        appointmentID: 'APT002',
+        // Missing required fields
+      };
+
+      await expect(Appointment.create(appointmentData)).rejects.toThrow();
+    });
+
+    it('should generate unique appointmentID', async () => {
+      const appointmentData = {
+        appointmentID: 'APT003',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'consultation',
+      };
+
+      await Appointment.create(appointmentData);
+
+      // Try to create duplicate
+      await expect(Appointment.create(appointmentData)).rejects.toThrow();
+    });
+
+    it('should set default status to scheduled', async () => {
+      const appointment = await Appointment.create({
+        appointmentID: 'APT004',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'consultation',
+      });
+
+      expect(appointment.status).toBe('scheduled');
+    });
+
+    it('should validate appointment type enum', async () => {
+      const appointmentData = {
+        appointmentID: 'APT005',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'invalid_type',
+      };
+
+      await expect(Appointment.create(appointmentData)).rejects.toThrow();
+    });
+
+    it('should validate status enum', async () => {
+      const appointmentData = {
+        appointmentID: 'APT006',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'consultation',
+        status: 'invalid_status',
+      };
+
+      await expect(Appointment.create(appointmentData)).rejects.toThrow();
+    });
+  });
+
+  describe('Appointment Status Updates', () => {
+    it('should update appointment status', async () => {
+      const appointment = await Appointment.create({
+        appointmentID: 'APT007',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'consultation',
+        status: 'scheduled',
+      });
+
+      appointment.status = 'completed';
+      await appointment.save();
+
+      const updated = await Appointment.findById(appointment._id);
+      expect(updated.status).toBe('completed');
+    });
+
+    it('should track cancellation reason', async () => {
+      const appointment = await Appointment.create({
+        appointmentID: 'APT008',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'consultation',
+        status: 'scheduled',
+      });
+
+      appointment.status = 'cancelled';
+      appointment.cancellationReason = 'Patient requested';
+      await appointment.save();
+
+      const updated = await Appointment.findById(appointment._id);
+      expect(updated.status).toBe('cancelled');
+      expect(updated.cancellationReason).toBe('Patient requested');
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle past dates', async () => {
+      const pastDate = new Date('2020-01-01');
+      const appointment = await Appointment.create({
+        appointmentID: 'APT009',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: pastDate,
+        time: '10:00',
+        type: 'consultation',
+      });
+
+      expect(appointment.date).toEqual(pastDate);
+    });
+
+    it('should handle different time formats', async () => {
+      const times = ['09:00', '14:30', '23:59'];
+
+      for (const time of times) {
+        const appointment = await Appointment.create({
+          appointmentID: `APT_${time.replace(':', '')}`,
+          patientID: patient._id,
+          doctorID: doctor._id,
+          hospitalID: hospital._id,
+          date: new Date('2025-12-01'),
+          time,
+          type: 'consultation',
+        });
+
+        expect(appointment.time).toBe(time);
+      }
+    });
+
+    it('should handle long symptoms and notes', async () => {
+      const longText = 'a'.repeat(1000);
+      const appointment = await Appointment.create({
+        appointmentID: 'APT010',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'consultation',
+        symptoms: longText,
+        notes: longText,
+      });
+
+      expect(appointment.symptoms).toBe(longText);
+      expect(appointment.notes).toBe(longText);
+    });
+  });
+
+  describe('References', () => {
+    it('should populate patient details', async () => {
+      const appointment = await Appointment.create({
+        appointmentID: 'APT011',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'consultation',
+      });
+
+      const populated = await Appointment.findById(appointment._id)
+        .populate('patientID', 'userName email');
+
+      expect(populated.patientID.userName).toBe(patient.userName);
+      expect(populated.patientID.email).toBe(patient.email);
+    });
+
+    it('should populate doctor details', async () => {
+      const appointment = await Appointment.create({
+        appointmentID: 'APT012',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'consultation',
+      });
+
+      const populated = await Appointment.findById(appointment._id)
+        .populate('doctorID', 'userName specialization');
+
+      expect(populated.doctorID.userName).toBe(doctor.userName);
+      expect(populated.doctorID.specialization).toBe(doctor.specialization);
+    });
+
+    it('should populate hospital details', async () => {
+      const appointment = await Appointment.create({
+        appointmentID: 'APT013',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'consultation',
+      });
+
+      const populated = await Appointment.findById(appointment._id)
+        .populate('hospitalID', 'name address');
+
+      expect(populated.hospitalID.name).toBe(hospital.name);
+      expect(populated.hospitalID.address).toBeDefined();
+    });
+  });
+});
+
