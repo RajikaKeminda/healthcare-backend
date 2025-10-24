@@ -5,10 +5,15 @@ let mongoServer;
 
 // Setup function before all tests
 beforeAll(async () => {
+  // Close any existing mongoose connections
+  if (mongoose.connection.readyState !== 0) {
+    await mongoose.disconnect();
+  }
+  
   // Start in-memory MongoDB server
   mongoServer = await MongoMemoryServer.create();
   const mongoUri = mongoServer.getUri();
-
+  console.log('mongodb url: ', mongoUri);
   // Connect to the in-memory database
   await mongoose.connect(mongoUri, {
     useNewUrlParser: true,
@@ -36,6 +41,6 @@ afterEach(async () => {
 
 // Set environment variables for testing
 process.env.NODE_ENV = 'test';
-process.env.JWT_SECRET = 'test-secret-key-for-testing-only';
-process.env.JWT_EXPIRE = '1h';
+process.env.JWT_SECRET = 'your-secret-key';
+process.env.JWT_EXPIRE = '7d';
 

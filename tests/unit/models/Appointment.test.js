@@ -247,6 +247,18 @@ describe('Appointment Model', () => {
         date: new Date('2025-12-01'),
         time: '10:00',
         type: 'consultation',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+        },
+        subtotal: 2000,
+        tax: 0,
+        discount: 0,
+        total: 2000,
       });
 
       const populated = await Appointment.findById(appointment._id)

@@ -11,15 +11,16 @@ const MedicalRecord = require('../../models/MedicalRecord');
 // Generate JWT token for testing
 const generateToken = (userId, role = 'patient') => {
   return jwt.sign(
-    { _id: userId, role },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE }
+    { userId, role },
+    'your-secret-key',
+    { expiresIn: '7d' }
   );
 };
 
 // Create test user fixtures
 const createTestUser = async (role = 'patient', overrides = {}) => {
   const baseData = {
+    patientID: `PAT${Date.now()}`,
     userName: `test_${role}_${Date.now()}`,
     email: `test_${role}_${Date.now()}@test.com`,
     password: 'Test123!@#',
@@ -33,6 +34,36 @@ const createTestUser = async (role = 'patient', overrides = {}) => {
       zipCode: '10000',
       country: 'Sri Lanka',
     },
+    workingHours: {
+      Monday: {
+        open: '09:00',
+        close: '17:00',
+      },
+      Tuesday: {
+        open: '09:00',
+        close: '17:00',
+      },
+      Wednesday: {
+        open: '09:00',
+        close: '17:00',
+      },
+      Thursday: {
+        open: '09:00',
+        close: '17:00',
+      },
+      Friday: {
+        open: '09:00',
+        close: '17:00',
+      },
+      Saturday: {
+        open: '09:00',
+        close: '17:00',
+      },
+      Sunday: {
+        open: '09:00',
+        close: '17:00',
+      },
+    },
     ...overrides,
   };
 
@@ -41,6 +72,7 @@ const createTestUser = async (role = 'patient', overrides = {}) => {
     case 'patient':
       user = await Patient.create({
         ...baseData,
+        patientID: `PAT${Date.now()}`,
         bloodType: 'O+',
         emergencyContact: {
           name: 'Emergency Contact',
@@ -53,6 +85,7 @@ const createTestUser = async (role = 'patient', overrides = {}) => {
     case 'healthcare_professional':
       user = await HealthcareProfessional.create({
         ...baseData,
+        professionalID: `DOC${Date.now()}`,
         specialization: 'General Medicine',
         licenseNumber: 'LIC123456',
         department: 'Internal Medicine',
@@ -63,9 +96,15 @@ const createTestUser = async (role = 'patient', overrides = {}) => {
     case 'hospital_staff':
       user = await HospitalStaff.create({
         ...baseData,
+        staffID: `STAFF${Date.now()}`,
         staffRole: 'receptionist',
         employeeID: 'EMP123456',
         hireDate: new Date('2020-01-01'),
+        workingHours: {
+          start: '09:00',
+          end: '17:00',
+        },
+        department: 'Reception',
       });
       break;
     case 'healthcare_manager':
@@ -81,8 +120,9 @@ const createTestUser = async (role = 'patient', overrides = {}) => {
 // Create test hospital
 const createTestHospital = async (overrides = {}) => {
   return await Hospital.create({
+    hospitalID: `HOS${Date.now()}`,
     name: `Test Hospital ${Date.now()}`,
-    type: 'general',
+    type: 'private',
     address: {
       street: '456 Hospital Ave',
       city: 'Colombo',
@@ -96,7 +136,13 @@ const createTestHospital = async (overrides = {}) => {
       website: 'https://testhospital.com',
     },
     departments: ['Cardiology', 'Neurology', 'Pediatrics'],
-    facilities: ['Emergency Room', 'ICU', 'Laboratory'],
+    capacity: {
+      totalBeds: 100,
+      occupiedBeds: 50,
+      icuBeds: 10,
+      emergencyBeds: 15,
+    },
+    facilities: ['emergency', 'icu', 'laboratory'],
     ...overrides,
   });
 };
@@ -113,6 +159,18 @@ const createTestAppointment = async (patient, doctor, hospital, overrides = {}) 
     type: 'consultation',
     status: 'scheduled',
     symptoms: 'Test symptoms',
+    reservationFee: {
+      amount: 1000,
+      paid: false,
+      paymentDate: null,
+      paymentMethod: null,
+    },
+    consultationFee: {
+      amount: 2000,
+      paid: false,
+      paymentDate: null,
+      paymentMethod: null,
+    },
     ...overrides,
   });
 };

@@ -23,6 +23,18 @@ describe('Payment Model', () => {
         method: 'cash',
         status: 'completed',
         transactionReference: 'TXN001',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       };
 
       const payment = await Payment.create(paymentData);
@@ -51,6 +63,18 @@ describe('Payment Model', () => {
         amount: 2000,
         method: 'cash',
         transactionReference: 'TXN003',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       };
 
       await Payment.create(paymentData);
@@ -67,6 +91,18 @@ describe('Payment Model', () => {
         amount: 2000,
         method: 'cash',
         transactionReference: 'TXN004',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       });
 
       expect(payment.status).toBe('pending');
@@ -123,6 +159,18 @@ describe('Payment Model', () => {
         amount: 2000,
         method: 'cash',
         transactionReference: 'TXN008',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       });
 
       expect(payment.appointmentID.toString()).toBe(appointment._id.toString());
@@ -137,6 +185,18 @@ describe('Payment Model', () => {
         amount: 2000,
         method: 'cash',
         transactionReference: 'TXN009',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       });
 
       const populated = await Payment.findById(payment._id)
@@ -224,6 +284,18 @@ describe('Payment Model', () => {
           coveredAmount: 1500,
           patientResponsibility: 500,
         },
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       });
 
       expect(payment.insuranceInfo.provider).toBe('Test Insurance Co.');
@@ -244,6 +316,18 @@ describe('Payment Model', () => {
         status: 'completed',
         transactionReference: 'TXN013',
         receiptNumber: 'RCP2024001',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       });
 
       expect(payment.receiptNumber).toBe('RCP2024001');
@@ -266,6 +350,18 @@ describe('Payment Model', () => {
           status: 'processed',
           processedAt: new Date(),
         },
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       });
 
       expect(payment.refundInfo.amount).toBe(500);
@@ -284,6 +380,18 @@ describe('Payment Model', () => {
         amount: largeAmount,
         method: 'bank_transfer',
         transactionReference: 'TXN015',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       });
 
       expect(payment.amount).toBe(largeAmount);
@@ -298,6 +406,18 @@ describe('Payment Model', () => {
         amount: decimalAmount,
         method: 'cash',
         transactionReference: 'TXN016',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       });
 
       expect(payment.amount).toBe(decimalAmount);
@@ -312,6 +432,18 @@ describe('Payment Model', () => {
         amount: 2000,
         method: 'cash',
         transactionReference: longRef,
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       });
 
       expect(payment.transactionReference).toBe(longRef);
@@ -339,6 +471,10 @@ describe('Payment Model', () => {
           discount: 0,
           total: 1000,
         },
+        subtotal: 1000,
+        tax: 0,
+        discount: 0,
+        total: 1000,
       });
 
       expect(payment.billingDetails.services).toHaveLength(10);
@@ -354,6 +490,18 @@ describe('Payment Model', () => {
         amount: 2000,
         method: 'cash',
         transactionReference: 'TXN019',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       });
 
       const populated = await Payment.findById(payment._id)
@@ -371,6 +519,18 @@ describe('Payment Model', () => {
         amount: 2000,
         method: 'cash',
         transactionReference: 'TXN020',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       });
 
       const populated = await Payment.findById(payment._id)
@@ -391,6 +551,18 @@ describe('Payment Model', () => {
         method: 'cash',
         status: 'pending',
         transactionReference: 'TXN021',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       });
 
       payment.status = 'completed';
@@ -410,6 +582,18 @@ describe('Payment Model', () => {
         method: 'cash',
         status: 'pending',
         transactionReference: 'TXN022',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
       });
 
       payment.status = 'completed';
