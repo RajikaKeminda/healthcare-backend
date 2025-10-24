@@ -5,7 +5,7 @@ const patientSchema = new mongoose.Schema({
   patientID: {
     type: String,
     unique: true,
-    required: true
+    required: false
   },
   medicalHistory: [{
     condition: { type: String, required: true },
@@ -62,7 +62,7 @@ const patientSchema = new mongoose.Schema({
 // Generate patient ID before saving
 patientSchema.pre('save', async function(next) {
   if (!this.patientID) {
-    const count = await mongoose.models.Patient.countDocuments();
+    const count = await this.constructor.countDocuments();
     this.patientID = `PAT${String(count + 1).padStart(6, '0')}`;
   }
   next();

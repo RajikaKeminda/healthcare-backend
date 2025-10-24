@@ -4,7 +4,7 @@ const paymentSchema = new mongoose.Schema({
   paymentID: {
     type: String,
     unique: true,
-    required: true
+    required: false
   },
   patientID: {
     type: mongoose.Schema.Types.ObjectId,
@@ -112,7 +112,7 @@ const paymentSchema = new mongoose.Schema({
 // Generate payment ID before saving
 paymentSchema.pre('save', async function(next) {
   if (!this.paymentID) {
-    const count = await mongoose.models.Payment.countDocuments();
+    const count = await this.constructor.countDocuments();
     this.paymentID = `PAY${String(count + 1).padStart(6, '0')}`;
   }
   next();

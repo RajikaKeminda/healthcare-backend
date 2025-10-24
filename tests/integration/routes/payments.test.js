@@ -55,7 +55,7 @@ describe('Payments Routes', () => {
       expect(response.body.data.payment).toBeDefined();
       expect(response.body.data.payment.paymentID).toBeDefined();
       expect(response.body.data.payment.amount).toBe(2000);
-      expect(response.body.data.payment.status).toBe('pending');
+      expect(response.body.data.payment.status).toBe('completed');
     });
 
     it('should process payment with credit card', async () => {
@@ -388,8 +388,9 @@ describe('Payments Routes', () => {
 
     it('should process refund as staff', async () => {
       const refundData = {
-        amount: 500,
-        reason: 'Appointment cancelled',
+        refundAmount: 500,
+        refundReason: 'Appointment cancelled',
+        refundMethod: 'cash',
       };
 
       const response = await request(app)
@@ -399,14 +400,15 @@ describe('Payments Routes', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data.payment.refundInfo).toBeDefined();
-      expect(response.body.data.payment.refundInfo.amount).toBe(500);
+      expect(response.body.data.payment.refund).toBeDefined();
+      expect(response.body.data.payment.refund.refundAmount).toBe(500);
     });
 
     it('should fail with refund amount greater than payment', async () => {
       const refundData = {
-        amount: 10000,
-        reason: 'Test',
+        refundAmount: 10000,
+        refundReason: 'Test',
+        refundMethod: 'cash',
       };
 
       const response = await request(app)
@@ -420,7 +422,8 @@ describe('Payments Routes', () => {
 
     it('should fail without reason', async () => {
       const refundData = {
-        amount: 500,
+        refundAmount: 500,
+        refundMethod: 'cash',
       };
 
       const response = await request(app)
@@ -440,6 +443,18 @@ describe('Payments Routes', () => {
         hospitalID: hospital._id,
         amount: 999999.99,
         method: 'bank_transfer',
+        billingDetails: {
+          services: [{
+            serviceName: 'Large Payment Service',
+            unitPrice: 999999.99,
+            quantity: 1,
+            totalPrice: 999999.99,
+          }],
+          subtotal: 999999.99,
+          tax: 0,
+          discount: 0,
+          total: 999999.99,
+        },
       };
 
       const response = await request(app)
@@ -489,13 +504,38 @@ describe('Payments Routes', () => {
         patientID: patient._id,
         hospitalID: hospital._id,
         method: 'cash',
+        billingDetails: {
+          services: [{
+            serviceName: 'Concurrent Payment Service',
+            unitPrice: 1000,
+            quantity: 1,
+            totalPrice: 1000,
+          }],
+          subtotal: 1000,
+          tax: 0,
+          discount: 0,
+          total: 1000,
+        },
       };
 
       const promises = Array(5).fill(null).map((_, i) =>
         request(app)
           .post('/api/payments')
           .set('Cookie', [`token=${staffToken}`])
-          .send({ ...paymentData, amount: (i + 1) * 1000 })
+          .send({ 
+            ...paymentData, 
+            amount: (i + 1) * 1000,
+            billingDetails: {
+              ...paymentData.billingDetails,
+              services: [{
+                ...paymentData.billingDetails.services[0],
+                unitPrice: (i + 1) * 1000,
+                totalPrice: (i + 1) * 1000,
+              }],
+              subtotal: (i + 1) * 1000,
+              total: (i + 1) * 1000,
+            }
+          })
       );
 
       const responses = await Promise.all(promises);

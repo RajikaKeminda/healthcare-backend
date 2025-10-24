@@ -401,6 +401,721 @@ describe('Medical Records Routes', () => {
     });
   });
 
+  describe('GET /api/medical-records - Additional Test Cases for Lines 1-93', () => {
+    beforeEach(async () => {
+      // Create multiple records for testing
+      await createTestMedicalRecord(patient, doctor, hospital, {
+        visitDate: new Date('2023-01-01'),
+        chiefComplaint: 'January visit'
+      });
+      await createTestMedicalRecord(patient, doctor, hospital, {
+        visitDate: new Date('2023-02-01'),
+        chiefComplaint: 'February visit'
+      });
+      await createTestMedicalRecord(patient, doctor, hospital, {
+        visitDate: new Date('2023-03-01'),
+        chiefComplaint: 'March visit'
+      });
+    });
+
+    it('should validate query parameters - invalid page', async () => {
+      const response = await request(app)
+        .get('/api/medical-records?page=0')
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+      expect(response.body.errors).toBeDefined();
+    });
+
+    it('should validate query parameters - invalid limit', async () => {
+      const response = await request(app)
+        .get('/api/medical-records?limit=200')
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should validate query parameters - invalid patientID', async () => {
+      const response = await request(app)
+        .get('/api/medical-records?patientID=invalid-id')
+        .set('Cookie', [`token=${doctorToken}`])
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should validate query parameters - invalid doctorID', async () => {
+      const response = await request(app)
+        .get('/api/medical-records?doctorID=invalid-id')
+        .set('Cookie', [`token=${doctorToken}`])
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should validate query parameters - invalid dateFrom', async () => {
+      const response = await request(app)
+        .get('/api/medical-records?dateFrom=invalid-date')
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should validate query parameters - invalid dateTo', async () => {
+      const response = await request(app)
+        .get('/api/medical-records?dateTo=invalid-date')
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should filter records by date range', async () => {
+      const response = await request(app)
+        .get('/api/medical-records?dateFrom=2023-01-01&dateTo=2023-02-28')
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      const records = response.body.data.medicalRecords;
+      expect(records.length).toBeGreaterThan(0);
+      
+      // Check all records are within date range
+      records.forEach(record => {
+        const visitDate = new Date(record.visitDate);
+        expect(visitDate.getTime()).toBeGreaterThanOrEqual(new Date('2023-01-01').getTime());
+        expect(visitDate.getTime()).toBeLessThanOrEqual(new Date('2023-02-28').getTime());
+      });
+    });
+
+    it('should filter records by dateFrom only', async () => {
+      const response = await request(app)
+        .get('/api/medical-records?dateFrom=2023-02-01')
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      const records = response.body.data.medicalRecords;
+      expect(records.length).toBeGreaterThan(0);
+      
+      records.forEach(record => {
+        const visitDate = new Date(record.visitDate);
+        expect(visitDate.getTime()).toBeGreaterThanOrEqual(new Date('2023-02-01').getTime());
+      });
+    });
+
+    it('should filter records by dateTo only', async () => {
+      const response = await request(app)
+        .get('/api/medical-records?dateTo=2023-02-28')
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      const records = response.body.data.medicalRecords;
+      expect(records.length).toBeGreaterThan(0);
+      
+      records.forEach(record => {
+        const visitDate = new Date(record.visitDate);
+        expect(visitDate.getTime()).toBeLessThanOrEqual(new Date('2023-02-28').getTime());
+      });
+    });
+
+    it('should handle pagination with custom limit', async () => {
+      const response = await request(app)
+        .get('/api/medical-records?page=1&limit=2')
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.medicalRecords.length).toBeLessThanOrEqual(2);
+      expect(response.body.data.pagination.currentPage).toBe(1);
+      expect(response.body.data.pagination.itemsPerPage).toBe(2);
+    });
+
+    it('should handle second page pagination', async () => {
+      const response = await request(app)
+        .get('/api/medical-records?page=2&limit=1')
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.pagination.currentPage).toBe(2);
+    });
+
+    it('should populate all related data correctly', async () => {
+      const response = await request(app)
+        .get('/api/medical-records')
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      const records = response.body.data.medicalRecords;
+      
+      if (records.length > 0) {
+        const record = records[0];
+        expect(record.patientID).toBeDefined();
+        expect(record.patientID.userName).toBeDefined();
+        expect(record.patientID.email).toBeDefined();
+        expect(record.patientID.phone).toBeDefined();
+        
+        expect(record.doctorID).toBeDefined();
+        expect(record.doctorID.userName).toBeDefined();
+        expect(record.doctorID.email).toBeDefined();
+        expect(record.doctorID.specialization).toBeDefined();
+        
+        expect(record.hospitalID).toBeDefined();
+        expect(record.hospitalID.name).toBeDefined();
+        expect(record.hospitalID.address).toBeDefined();
+      }
+    });
+
+    it('should sort records by visitDate descending', async () => {
+      const response = await request(app)
+        .get('/api/medical-records')
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      const records = response.body.data.medicalRecords;
+      
+      // Check if sorted by date (newest first)
+      for (let i = 0; i < records.length - 1; i++) {
+        const date1 = new Date(records[i].visitDate);
+        const date2 = new Date(records[i + 1].visitDate);
+        expect(date1.getTime()).toBeGreaterThanOrEqual(date2.getTime());
+      }
+    });
+
+    it('should handle server error gracefully', async () => {
+      // Mock MedicalRecord.find to throw an error
+      const originalFind = require('../../../models/MedicalRecord').find;
+      require('../../../models/MedicalRecord').find = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app)
+        .get('/api/medical-records')
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Server error while fetching medical records');
+      
+      // Restore original function
+      require('../../../models/MedicalRecord').find = originalFind;
+    });
+  });
+
+  describe('POST /api/medical-records - Additional Test Cases for Lines 178-179', () => {
+    it('should handle server error during creation', async () => {
+      // Mock MedicalRecord constructor to throw an error
+      const originalCreate = require('../../../models/MedicalRecord');
+      const mockCreate = jest.fn().mockImplementation(() => {
+        throw new Error('Database connection error');
+      });
+      jest.spyOn(require('../../../models/MedicalRecord'), 'create').mockImplementation(mockCreate);
+
+      const recordData = {
+        patientID: patient._id,
+        hospitalID: hospital._id,
+        visitDate: new Date().toISOString(),
+        chiefComplaint: 'Test complaint',
+        diagnosis: [{ description: 'Test diagnosis' }]
+      };
+
+      const response = await request(app)
+        .post('/api/medical-records')
+        .set('Cookie', [`token=${doctorToken}`])
+        .send(recordData)
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Server error while creating medical record');
+      
+      // Restore original function
+      jest.restoreAllMocks();
+    });
+  });
+
+  describe('PUT /api/medical-records/:id - Additional Test Cases for Lines 195, 215-222, 231', () => {
+    let record;
+
+    beforeEach(async () => {
+      record = await createTestMedicalRecord(patient, doctor, hospital);
+    });
+
+    it('should handle validation errors in PUT route', async () => {
+      const invalidUpdates = {
+        chiefComplaint: '', // Empty string should fail validation
+        diagnosis: 'not-an-array' // Should be array
+      };
+
+      const response = await request(app)
+        .put(`/api/medical-records/${record._id}`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .send(invalidUpdates)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+      expect(response.body.errors).toBeDefined();
+    });
+
+    it('should deny access to patient trying to update another patient\'s record', async () => {
+      const anotherPatient = await createTestUser('patient');
+      const anotherPatientToken = generateToken(anotherPatient._id, anotherPatient.role);
+
+      const updates = {
+        chiefComplaint: 'Updated complaint'
+      };
+
+      const response = await request(app)
+        .put(`/api/medical-records/${record._id}`)
+        .set('Cookie', [`token=${anotherPatientToken}`])
+        .send(updates)
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Access denied');
+    });
+
+    it('should deny access to doctor trying to update another doctor\'s record', async () => {
+      const anotherDoctor = await createTestUser('healthcare_professional');
+      const anotherDoctorToken = generateToken(anotherDoctor._id, anotherDoctor.role);
+
+      const updates = {
+        chiefComplaint: 'Updated complaint'
+      };
+
+      const response = await request(app)
+        .put(`/api/medical-records/${record._id}`)
+        .set('Cookie', [`token=${anotherDoctorToken}`])
+        .send(updates)
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Access denied');
+    });
+
+    it('should handle date updates correctly', async () => {
+      const newDate = '2023-12-25T10:00:00.000Z';
+      const updates = {
+        visitDate: newDate,
+        chiefComplaint: 'Updated complaint'
+      };
+
+      const response = await request(app)
+        .put(`/api/medical-records/${record._id}`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .send(updates)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.medicalRecord.visitDate).toBe(newDate);
+    });
+
+    it('should update other fields correctly', async () => {
+      const updates = {
+        chiefComplaint: 'Updated chief complaint',
+        diagnosis: [{ description: 'Updated diagnosis', code: 'ICD10-UPDATED' }],
+        treatmentPlan: {
+          medications: [{
+            name: 'Updated Medicine',
+            dosage: '250mg',
+            frequency: 'Once daily',
+            duration: '10 days'
+          }]
+        }
+      };
+
+      const response = await request(app)
+        .put(`/api/medical-records/${record._id}`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .send(updates)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.medicalRecord.chiefComplaint).toBe('Updated chief complaint');
+      expect(response.body.data.medicalRecord.diagnosis[0].description).toBe('Updated diagnosis');
+      expect(response.body.data.medicalRecord.treatmentPlan.medications[0].name).toBe('Updated Medicine');
+    });
+
+    it('should log access when updating record', async () => {
+      const updates = {
+        chiefComplaint: 'Updated complaint'
+      };
+
+      const response = await request(app)
+        .put(`/api/medical-records/${record._id}`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .send(updates)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      
+      // Verify access log was updated
+      const updatedRecord = await require('../../../models/MedicalRecord').findById(record._id);
+      const lastAccess = updatedRecord.accessLog[updatedRecord.accessLog.length - 1];
+      expect(lastAccess.action).toBe('edited');
+      expect(lastAccess.accessedBy.toString()).toBe(doctor._id.toString());
+    });
+  });
+
+  describe('GET /api/medical-records/:id - Additional Test Cases for Lines 293, 312-313', () => {
+    let record;
+
+    beforeEach(async () => {
+      record = await createTestMedicalRecord(patient, doctor, hospital);
+    });
+
+    it('should deny access to doctor trying to view another doctor\'s record', async () => {
+      const anotherDoctor = await createTestUser('healthcare_professional');
+      const anotherDoctorToken = generateToken(anotherDoctor._id, anotherDoctor.role);
+
+      const response = await request(app)
+        .get(`/api/medical-records/${record._id}`)
+        .set('Cookie', [`token=${anotherDoctorToken}`])
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Access denied');
+    });
+
+    it('should handle server error when fetching record by ID', async () => {
+      // Mock MedicalRecord.findById to throw an error
+      const originalFindById = require('../../../models/MedicalRecord').findById;
+      require('../../../models/MedicalRecord').findById = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app)
+        .get(`/api/medical-records/${record._id}`)
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Server error while fetching medical record');
+      
+      // Restore original function
+      require('../../../models/MedicalRecord').findById = originalFindById;
+    });
+
+    it('should log access when viewing record', async () => {
+      const response = await request(app)
+        .get(`/api/medical-records/${record._id}`)
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      
+      // Verify access log was updated
+      const updatedRecord = await require('../../../models/MedicalRecord').findById(record._id);
+      const lastAccess = updatedRecord.accessLog[updatedRecord.accessLog.length - 1];
+      expect(lastAccess.action).toBe('viewed');
+      expect(lastAccess.accessedBy.toString()).toBe(patient._id.toString());
+    });
+  });
+
+  describe('POST /api/medical-records/:id/attachments - Test Cases for Lines 323-384', () => {
+    let record;
+
+    beforeEach(async () => {
+      record = await createTestMedicalRecord(patient, doctor, hospital);
+    });
+
+    it('should handle no file uploaded', async () => {
+      const response = await request(app)
+        .post(`/api/medical-records/${record._id}/attachments`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('No file uploaded');
+    });
+
+    it('should deny access to patient trying to upload to another patient\'s record', async () => {
+      const anotherPatient = await createTestUser('patient');
+      const anotherPatientToken = generateToken(anotherPatient._id, anotherPatient.role);
+
+      // Create a mock file
+      const mockFile = Buffer.from('test file content');
+      
+      const response = await request(app)
+        .post(`/api/medical-records/${record._id}/attachments`)
+        .set('Cookie', [`token=${anotherPatientToken}`])
+        .attach('file', mockFile, 'test.txt')
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Access denied');
+    });
+
+    it('should deny access to doctor trying to upload to another doctor\'s record', async () => {
+      const anotherDoctor = await createTestUser('healthcare_professional');
+      const anotherDoctorToken = generateToken(anotherDoctor._id, anotherDoctor.role);
+
+      // Create a mock file
+      const mockFile = Buffer.from('test file content');
+      
+      const response = await request(app)
+        .post(`/api/medical-records/${record._id}/attachments`)
+        .set('Cookie', [`token=${anotherDoctorToken}`])
+        .attach('file', mockFile, 'test.txt')
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Access denied');
+    });
+
+    it('should handle server error during file upload', async () => {
+      // Mock MedicalRecord.findById to throw an error
+      const originalFindById = require('../../../models/MedicalRecord').findById;
+      require('../../../models/MedicalRecord').findById = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      // Create a mock file
+      const mockFile = Buffer.from('test file content');
+      
+      const response = await request(app)
+        .post(`/api/medical-records/${record._id}/attachments`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .attach('file', mockFile, 'test.txt')
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Server error while uploading file');
+      
+      // Restore original function
+      require('../../../models/MedicalRecord').findById = originalFindById;
+    });
+
+    it('should successfully upload file attachment', async () => {
+      // Create a mock file
+      const mockFile = Buffer.from('test file content');
+      
+      const response = await request(app)
+        .post(`/api/medical-records/${record._id}/attachments`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .attach('file', mockFile, 'test.txt')
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('File uploaded successfully');
+      expect(response.body.data.attachment).toBeDefined();
+      expect(response.body.data.attachment.fileName).toBe('test.txt');
+      expect(response.body.data.attachment.uploadedBy).toBe(doctor._id.toString());
+    });
+
+    it('should log access when uploading file', async () => {
+      // Create a mock file
+      const mockFile = Buffer.from('test file content');
+      
+      const response = await request(app)
+        .post(`/api/medical-records/${record._id}/attachments`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .attach('file', mockFile, 'test.txt')
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      
+      // Verify access log was updated
+      const updatedRecord = await require('../../../models/MedicalRecord').findById(record._id);
+      const lastAccess = updatedRecord.accessLog[updatedRecord.accessLog.length - 1];
+      expect(lastAccess.action).toBe('edited');
+      expect(lastAccess.accessedBy.toString()).toBe(doctor._id.toString());
+    });
+  });
+
+  describe('POST /api/medical-records/:id/progress-notes - Test Cases for Lines 396-457', () => {
+    let record;
+
+    beforeEach(async () => {
+      record = await createTestMedicalRecord(patient, doctor, hospital);
+    });
+
+    it('should handle validation errors for progress notes', async () => {
+      const invalidNote = {
+        note: '' // Empty note should fail validation
+      };
+
+      const response = await request(app)
+        .post(`/api/medical-records/${record._id}/progress-notes`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .send(invalidNote)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+      expect(response.body.errors).toBeDefined();
+    });
+
+    it('should deny access to patient trying to add progress note to another patient\'s record', async () => {
+      const anotherPatient = await createTestUser('patient');
+      const anotherPatientToken = generateToken(anotherPatient._id, anotherPatient.role);
+
+      const progressNote = {
+        note: 'Test progress note'
+      };
+
+      const response = await request(app)
+        .post(`/api/medical-records/${record._id}/progress-notes`)
+        .set('Cookie', [`token=${anotherPatientToken}`])
+        .send(progressNote)
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Access denied');
+    });
+
+    it('should deny access to doctor trying to add progress note to another doctor\'s record', async () => {
+      const anotherDoctor = await createTestUser('healthcare_professional');
+      const anotherDoctorToken = generateToken(anotherDoctor._id, anotherDoctor.role);
+
+      const progressNote = {
+        note: 'Test progress note'
+      };
+
+      const response = await request(app)
+        .post(`/api/medical-records/${record._id}/progress-notes`)
+        .set('Cookie', [`token=${anotherDoctorToken}`])
+        .send(progressNote)
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Access denied');
+    });
+
+    it('should handle server error when adding progress note', async () => {
+      // Mock MedicalRecord.findById to throw an error
+      const originalFindById = require('../../../models/MedicalRecord').findById;
+      require('../../../models/MedicalRecord').findById = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const progressNote = {
+        note: 'Test progress note'
+      };
+
+      const response = await request(app)
+        .post(`/api/medical-records/${record._id}/progress-notes`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .send(progressNote)
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Server error while adding progress note');
+      
+      // Restore original function
+      require('../../../models/MedicalRecord').findById = originalFindById;
+    });
+
+    it('should successfully add progress note', async () => {
+      const progressNote = {
+        note: 'Patient showing significant improvement'
+      };
+
+      const response = await request(app)
+        .post(`/api/medical-records/${record._id}/progress-notes`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .send(progressNote)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('Progress note added successfully');
+      expect(response.body.data.progressNote).toBeDefined();
+      expect(response.body.data.progressNote.note).toBe('Patient showing significant improvement');
+      expect(response.body.data.progressNote.author).toBe(doctor._id.toString());
+    });
+
+    it('should log access when adding progress note', async () => {
+      const progressNote = {
+        note: 'Test progress note'
+      };
+
+      const response = await request(app)
+        .post(`/api/medical-records/${record._id}/progress-notes`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .send(progressNote)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      
+      // Verify access log was updated
+      const updatedRecord = await require('../../../models/MedicalRecord').findById(record._id);
+      const lastAccess = updatedRecord.accessLog[updatedRecord.accessLog.length - 1];
+      expect(lastAccess.action).toBe('edited');
+      expect(lastAccess.accessedBy.toString()).toBe(doctor._id.toString());
+    });
+  });
+
+  describe('DELETE /api/medical-records/:id - Additional Test Cases for Lines 480, 497', () => {
+    let record;
+
+    beforeEach(async () => {
+      record = await createTestMedicalRecord(patient, doctor, hospital);
+    });
+
+    it('should deny access to doctor trying to delete another doctor\'s record', async () => {
+      const anotherDoctor = await createTestUser('healthcare_professional');
+      const anotherDoctorToken = generateToken(anotherDoctor._id, anotherDoctor.role);
+
+      const response = await request(app)
+        .delete(`/api/medical-records/${record._id}`)
+        .set('Cookie', [`token=${anotherDoctorToken}`])
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Access denied');
+    });
+
+    it('should handle server error when deleting record', async () => {
+      // Mock MedicalRecord.findById to throw an error
+      const originalFindById = require('../../../models/MedicalRecord').findById;
+      require('../../../models/MedicalRecord').findById = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app)
+        .delete(`/api/medical-records/${record._id}`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Server error while deleting medical record');
+      
+      // Restore original function
+      require('../../../models/MedicalRecord').findById = originalFindById;
+    });
+
+    it('should log access when deleting record', async () => {
+      const response = await request(app)
+        .delete(`/api/medical-records/${record._id}`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      
+      // Verify access log was updated
+      const updatedRecord = await require('../../../models/MedicalRecord').findById(record._id);
+      const lastAccess = updatedRecord.accessLog[updatedRecord.accessLog.length - 1];
+      expect(lastAccess.action).toBe('deleted');
+      expect(lastAccess.accessedBy.toString()).toBe(doctor._id.toString());
+    });
+
+    it('should perform soft delete (set isActive to false)', async () => {
+      const response = await request(app)
+        .delete(`/api/medical-records/${record._id}`)
+        .set('Cookie', [`token=${doctorToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      
+      // Verify record is soft deleted
+      const deletedRecord = await require('../../../models/MedicalRecord').findById(record._id);
+      expect(deletedRecord.isActive).toBe(false);
+    });
+  });
+
   describe('Edge Cases', () => {
     it('should handle records with extensive medical history', async () => {
       const medications = Array(30).fill(null).map((_, i) => ({

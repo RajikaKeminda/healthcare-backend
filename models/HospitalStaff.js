@@ -5,7 +5,7 @@ const hospitalStaffSchema = new mongoose.Schema({
   staffID: {
     type: String,
     unique: true,
-    required: true
+    required: false
   },
   staffRole: {
     type: String,
@@ -72,7 +72,7 @@ const hospitalStaffSchema = new mongoose.Schema({
 // Generate staff ID before saving
 hospitalStaffSchema.pre('save', async function(next) {
   if (!this.staffID) {
-    const count = await mongoose.models.HospitalStaff.countDocuments();
+    const count = await this.constructor.countDocuments();
     this.staffID = `STAFF${String(count + 1).padStart(6, '0')}`;
   }
   next();

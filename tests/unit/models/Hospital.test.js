@@ -1,32 +1,18 @@
 const Hospital = require('../../../models/Hospital');
+const { createTestHospital } = require('../../utils/testHelpers');
 
 require('../../setup');
 
 describe('Hospital Model', () => {
   describe('Hospital Creation', () => {
     it('should create a valid hospital with required fields', async () => {
-      const hospitalData = {
-        name: 'Central Hospital',
-        type: 'general',
-        address: {
-          street: '123 Main St',
-          city: 'Colombo',
-          state: 'Western',
-          zipCode: '10000',
-          country: 'Sri Lanka',
-        },
-        contactInfo: {
-          phone: '+94112345678',
-          email: 'info@centralhospital.lk',
-        },
-      };
-
-      const hospital = await Hospital.create(hospitalData);
+      const hospital = await createTestHospital();
 
       expect(hospital).toBeDefined();
-      expect(hospital.name).toBe('Central Hospital');
-      expect(hospital.type).toBe('general');
+      expect(hospital.name).toContain('Test Hospital');
+      expect(hospital.type).toBe('public');
       expect(hospital.address.city).toBe('Colombo');
+      expect(hospital.capacity.totalBeds).toBe(100);
     });
 
     it('should fail without required fields', async () => {

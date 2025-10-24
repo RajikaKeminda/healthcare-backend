@@ -2,59 +2,31 @@ const User = require('../../../models/User');
 const Patient = require('../../../models/Patient');
 const HealthcareProfessional = require('../../../models/HealthcareProfessional');
 const bcrypt = require('bcryptjs');
+const { createTestUser, createBasicUser } = require('../../utils/testHelpers');
 
 require('../../setup');
 
 describe('User Model', () => {
   describe('User Creation', () => {
     it('should create a valid user with required fields', async () => {
-      const userData = {
-        userName: 'testuser',
-        email: 'test@example.com',
-        password: 'Test123!@#',
-        phone: '+94771234567',
-        dateOfBirth: new Date('1990-01-01'),
-        role: 'patient',
-        address: {
-          street: '123 Test St',
-          city: 'Colombo',
-          state: 'Western',
-          zipCode: '10000',
-          country: 'Sri Lanka',
-        },
-      };
-
-      const user = await User.create(userData);
+      const user = await createTestUser('patient');
 
       expect(user).toBeDefined();
-      expect(user.userName).toBe(userData.userName);
-      expect(user.email).toBe(userData.email);
-      expect(user.phone).toBe(userData.phone);
-      expect(user.role).toBe(userData.role);
+      expect(user.userName).toContain('test_patient_');
+      expect(user.email).toContain('test_patient_');
+      expect(user.phone).toBe('+94771234567');
+      expect(user.role).toBe('patient');
       expect(user.isActive).toBe(true);
     });
 
     it('should hash password before saving', async () => {
-      const password = 'Test123!@#';
-      const user = await User.create({
-        userName: 'passwordtest',
-        email: 'password@test.com',
-        password,
-        phone: '+94771234567',
-        dateOfBirth: new Date('1990-01-01'),
-        role: 'patient',
-        address: {
-          street: '123 Test St',
-          city: 'Colombo',
-          zipCode: '10000',
-        },
-      });
+      const user = await createTestUser('patient');
 
-      expect(user.password).not.toBe(password);
+      expect(user.password).not.toBe('Test123!@#');
       expect(user.password).toMatch(/^\$2[ayb]\$.{56}$/); // bcrypt hash pattern
       
       // Verify password can be compared
-      const isMatch = await bcrypt.compare(password, user.password);
+      const isMatch = await bcrypt.compare('Test123!@#', user.password);
       expect(isMatch).toBe(true);
     });
 

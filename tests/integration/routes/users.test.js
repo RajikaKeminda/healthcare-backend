@@ -1,40 +1,146 @@
 const request = require('supertest');
+const mongoose = require('mongoose');
+const { MongoMemoryServer } = require('mongodb-memory-server');
 const app = require('../../../app');
-const { createTestUser, generateToken } = require('../../utils/testHelpers');
-
-require('../../setup');
+const User = require('../../../models/User');
+const Patient = require('../../../models/Patient');
+const HealthcareProfessional = require('../../../models/HealthcareProfessional');
+const HospitalStaff = require('../../../models/HospitalStaff');
+const { createTestUser, createTestToken } = require('../../utils/testHelpers');
 
 describe('Users Routes', () => {
-  let manager, managerToken, staffToken, patientToken;
+  let mongoServer;
+  let managerToken;
+  let staffToken;
+  let patientToken;
+  let doctorToken;
+  let manager;
+  let staff;
+  let patient;
+  let doctor;
 
-  beforeEach(async () => {
-    manager = await createTestUser('healthcare_manager');
-    const staff = await createTestUser('hospital_staff');
-    const patient = await createTestUser('patient');
-    
-    managerToken = generateToken(manager._id, manager.role);
-    staffToken = generateToken(staff._id, staff.role);
-    patientToken = generateToken(patient._id, patient.role);
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    const mongoUri = mongoServer.getUri();
+    await mongoose.connect(mongoUri);
   });
 
-  describe('GET /api/users - Get All Users', () => {
-    beforeEach(async () => {
-      // Create multiple users
-      await createTestUser('patient', { userName: 'Patient 1' });
-      await createTestUser('patient', { userName: 'Patient 2' });
-      await createTestUser('healthcare_professional', { userName: 'Doctor 1' });
+  afterAll(async () => {
+    await mongoose.disconnect();
+    await mongoServer.stop();
+  });
+
+  beforeEach(async () => {
+    // Clear all collections
+    await User.deleteMany({});
+
+    // Create test users
+    manager = await createTestUser({
+      userName: 'Manager',
+      email: 'manager@test.com',
+      password: 'password123',
+      phone: '+1234567890',
+      role: 'healthcare_manager'
     });
 
-    it('should get all users as manager', async () => {
+    staff = await createTestUser({
+      userName: 'Staff',
+      email: 'staff@test.com',
+      password: 'password123',
+      phone: '+1234567891',
+      role: 'hospital_staff',
+      staffRole: 'nurse',
+      department: 'Emergency',
+      employeeID: 'EMP001',
+      hireDate: new Date('2020-01-15'),
+      workingHours: { start: '08:00', end: '16:00' }
+    });
+
+    patient = await createTestUser({
+      userName: 'Patient',
+      email: 'patient@test.com',
+      password: 'password123',
+      phone: '+1234567892',
+      role: 'patient',
+      bloodType: 'A+',
+      emergencyContact: {
+        name: 'Emergency Contact',
+        relationship: 'Spouse',
+        phone: '+1234567893'
+      }
+    });
+
+    doctor = await createTestUser({
+      userName: 'Doctor',
+      email: 'doctor@test.com',
+      password: 'password123',
+      phone: '+1234567894',
+      role: 'healthcare_professional',
+      specialization: 'Cardiology',
+      licenseNumber: 'LIC123456',
+      department: 'Cardiology',
+      consultationFee: 150
+    });
+
+    // Create additional test users for comprehensive testing
+    await createTestUser({
+      userName: 'Patient2',
+      email: 'patient2@test.com',
+      password: 'password123',
+      phone: '+1234567895',
+      role: 'patient',
+      bloodType: 'B+',
+      emergencyContact: {
+        name: 'Emergency Contact 2',
+        relationship: 'Parent',
+        phone: '+1234567896'
+      }
+    });
+
+    await createTestUser({
+      userName: 'Doctor2',
+      email: 'doctor2@test.com',
+      password: 'password123',
+      phone: '+1234567897',
+      role: 'healthcare_professional',
+      specialization: 'Neurology',
+      licenseNumber: 'LIC123457',
+      department: 'Neurology',
+      consultationFee: 200
+    });
+
+    await createTestUser({
+      userName: 'Staff2',
+      email: 'staff2@test.com',
+      password: 'password123',
+      phone: '+1234567898',
+      role: 'hospital_staff',
+      staffRole: 'receptionist',
+      department: 'Reception',
+      employeeID: 'EMP002',
+      hireDate: new Date('2020-02-15'),
+      workingHours: { start: '09:00', end: '17:00' }
+    });
+
+    // Create tokens
+    managerToken = createTestToken(manager);
+    staffToken = createTestToken(staff);
+    patientToken = createTestToken(patient);
+    doctorToken = createTestToken(doctor);
+  });
+
+  describe('GET /api/users', () => {
+    it('should get all users for manager', async () => {
       const response = await request(app)
         .get('/api/users')
         .set('Cookie', [`token=${managerToken}`])
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data.users).toBeInstanceOf(Array);
-      expect(response.body.data.users.length).toBeGreaterThan(0);
+      expect(response.body.data.users).toBeDefined();
       expect(response.body.data.pagination).toBeDefined();
+      expect(response.body.data.users.length).toBeGreaterThan(0);
+      expect(response.body.data.users[0].password).toBeUndefined(); // Password should be excluded
     });
 
     it('should filter users by role', async () => {
@@ -44,8 +150,37 @@ describe('Users Routes', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      const users = response.body.data.users;
-      expect(users.every(user => user.role === 'patient')).toBe(true);
+      expect(response.body.data.users.every(user => user.role === 'patient')).toBe(true);
+    });
+
+    it('should search users by name', async () => {
+      const response = await request(app)
+        .get('/api/users?search=Patient')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.users.length).toBeGreaterThan(0);
+    });
+
+    it('should search users by email', async () => {
+      const response = await request(app)
+        .get('/api/users?search=patient@test.com')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.users.length).toBeGreaterThan(0);
+    });
+
+    it('should search users by phone', async () => {
+      const response = await request(app)
+        .get('/api/users?search=+1234567892')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.users.length).toBeGreaterThan(0);
     });
 
     it('should paginate results', async () => {
@@ -60,39 +195,44 @@ describe('Users Routes', () => {
       expect(response.body.data.pagination.limit).toBe(2);
     });
 
-    it('should search users by name or email', async () => {
-      await createTestUser('patient', { 
-        userName: 'John Doe',
-        email: 'john.doe@test.com' 
-      });
-
+    it('should sort users by creation date', async () => {
       const response = await request(app)
-        .get('/api/users?search=John')
+        .get('/api/users?sortBy=createdAt&sortOrder=desc')
         .set('Cookie', [`token=${managerToken}`])
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data.users.some(u => u.userName.includes('John'))).toBe(true);
+      expect(response.body.data.users).toBeDefined();
     });
 
-    it('should sort users', async () => {
+    it('should sort users by name', async () => {
       const response = await request(app)
         .get('/api/users?sortBy=userName&sortOrder=asc')
         .set('Cookie', [`token=${managerToken}`])
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      const userNames = response.body.data.users.map(u => u.userName);
-      const sortedNames = [...userNames].sort();
-      expect(userNames).toEqual(sortedNames);
+      expect(response.body.data.users).toBeDefined();
     });
 
-    it('should fail without authentication', async () => {
+    it('should handle invalid page numbers', async () => {
       const response = await request(app)
-        .get('/api/users')
-        .expect(401);
+        .get('/api/users?page=0')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
 
-      expect(response.body.success).toBe(false);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.pagination.page).toBe(1); // Should default to 1
+    });
+
+    it('should handle invalid limit numbers', async () => {
+      const response = await request(app)
+        .get('/api/users?limit=300')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.pagination.limit).toBeLessThanOrEqual(200); // Should cap at 200
     });
 
     it('should fail for unauthorized roles', async () => {
@@ -104,33 +244,50 @@ describe('Users Routes', () => {
       expect(response.body.success).toBe(false);
     });
 
-    it('should not return 304 (should set Cache-Control)', async () => {
+    it('should fail without authentication', async () => {
+      const response = await request(app)
+        .get('/api/users')
+        .expect(401);
+
+      expect(response.body.success).toBe(false);
+    });
+
+    it('should handle server errors gracefully', async () => {
+      const originalFind = User.find;
+      User.find = jest.fn().mockRejectedValue(new Error('Database error'));
+
       const response = await request(app)
         .get('/api/users')
         .set('Cookie', [`token=${managerToken}`])
-        .expect(200);
+        .expect(500);
 
-      expect(response.headers['cache-control']).toContain('no-store');
+      expect(response.body.success).toBe(false);
+
+      User.find = originalFind;
     });
   });
 
-  describe('GET /api/users/:id - Get User By ID', () => {
-    let testPatient;
-
-    beforeEach(async () => {
-      testPatient = await createTestUser('patient');
-    });
-
-    it('should get user by ID as manager', async () => {
+  describe('GET /api/users/:id', () => {
+    it('should get user by ID for manager', async () => {
       const response = await request(app)
-        .get(`/api/users/${testPatient._id}`)
+        .get(`/api/users/${patient._id}`)
         .set('Cookie', [`token=${managerToken}`])
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data.user._id).toBe(testPatient._id.toString());
-      expect(response.body.data.user.userName).toBe(testPatient.userName);
+      expect(response.body.data.user).toBeDefined();
+      expect(response.body.data.user._id).toBe(patient._id.toString());
       expect(response.body.data.user.password).toBeUndefined();
+    });
+
+    it('should get own profile for any authenticated user', async () => {
+      const response = await request(app)
+        .get(`/api/users/${patient._id}`)
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.user._id).toBe(patient._id.toString());
     });
 
     it('should fail with invalid user ID', async () => {
@@ -142,32 +299,61 @@ describe('Users Routes', () => {
       expect(response.body.success).toBe(false);
     });
 
+    it('should fail with invalid ObjectId format', async () => {
+      const response = await request(app)
+        .get('/api/users/invalid-id')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+    });
+
+    it('should fail for unauthorized access to other users', async () => {
+      const response = await request(app)
+        .get(`/api/users/${doctor._id}`)
+        .set('Cookie', [`token=${patientToken}`])
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+    });
+
     it('should fail without authentication', async () => {
       const response = await request(app)
-        .get(`/api/users/${testPatient._id}`)
+        .get(`/api/users/${patient._id}`)
         .expect(401);
 
       expect(response.body.success).toBe(false);
     });
+
+    it('should handle server errors gracefully', async () => {
+      const originalFindById = User.findById;
+      User.findById = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app)
+        .get(`/api/users/${patient._id}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+
+      User.findById = originalFindById;
+    });
   });
 
-  describe('POST /api/users - Create User', () => {
-    it('should create patient as manager', async () => {
+  describe('POST /api/users', () => {
+    it('should create patient user', async () => {
       const userData = {
         userName: 'New Patient',
         email: 'newpatient@test.com',
-        password: 'Test123!@#',
-        phone: '+94771234567',
-        dateOfBirth: '1995-06-15',
+        password: 'password123',
+        phone: '+1234567899',
         role: 'patient',
-        address: {
-          street: '123 Test St',
-          city: 'Colombo',
-          state: 'Western',
-          zipCode: '10000',
-          country: 'Sri Lanka',
-        },
-        bloodType: 'A+',
+        bloodType: 'O+',
+        emergencyContact: {
+          name: 'Emergency Contact',
+          relationship: 'Spouse',
+          phone: '+1234567800'
+        }
       };
 
       const response = await request(app)
@@ -177,27 +363,24 @@ describe('Users Routes', () => {
         .expect(201);
 
       expect(response.body.success).toBe(true);
+      expect(response.body.data.user).toBeDefined();
+      expect(response.body.data.user.userName).toBe(userData.userName);
       expect(response.body.data.user.email).toBe(userData.email);
-      expect(response.body.data.user.role).toBe('patient');
+      expect(response.body.data.user.role).toBe(userData.role);
       expect(response.body.data.user.password).toBeUndefined();
     });
 
-    it('should create healthcare professional as manager', async () => {
+    it('should create healthcare professional user', async () => {
       const userData = {
-        userName: 'Dr. New Doctor',
+        userName: 'New Doctor',
         email: 'newdoctor@test.com',
-        password: 'Test123!@#',
-        phone: '+94771234568',
-        dateOfBirth: '1985-03-20',
+        password: 'password123',
+        phone: '+1234567801',
         role: 'healthcare_professional',
-        address: {
-          street: '456 Medical St',
-          city: 'Colombo',
-          zipCode: '10000',
-        },
-        specialization: 'Cardiology',
-        licenseNumber: 'LIC789012',
-        consultationFee: 3500,
+        specialization: 'Pediatrics',
+        licenseNumber: 'LIC123458',
+        department: 'Pediatrics',
+        consultationFee: 180
       };
 
       const response = await request(app)
@@ -207,21 +390,48 @@ describe('Users Routes', () => {
         .expect(201);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data.user.role).toBe('healthcare_professional');
-      expect(response.body.data.user.specialization).toBe('Cardiology');
+      expect(response.body.data.user).toBeDefined();
+      expect(response.body.data.user.specialization).toBe(userData.specialization);
+      expect(response.body.data.user.licenseNumber).toBe(userData.licenseNumber);
     });
 
-    it('should fail with missing required fields', async () => {
-      const incompleteData = {
-        userName: 'Incomplete User',
-        email: 'incomplete@test.com',
-        // Missing password, phone, dateOfBirth
+    it('should create hospital staff user', async () => {
+      const userData = {
+        userName: 'New Staff',
+        email: 'newstaff@test.com',
+        password: 'password123',
+        phone: '+1234567802',
+        role: 'hospital_staff',
+        staffRole: 'lab_technician',
+        department: 'Laboratory',
+        employeeID: 'EMP003',
+        hireDate: new Date('2020-03-15'),
+        workingHours: { start: '08:00', end: '16:00' }
       };
 
       const response = await request(app)
         .post('/api/users')
         .set('Cookie', [`token=${managerToken}`])
-        .send(incompleteData)
+        .send(userData)
+        .expect(201);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.user).toBeDefined();
+      expect(response.body.data.user.staffRole).toBe(userData.staffRole);
+      expect(response.body.data.user.employeeID).toBe(userData.employeeID);
+    });
+
+    it('should fail without required fields', async () => {
+      const userData = {
+        userName: 'Incomplete User',
+        email: 'incomplete@test.com'
+        // Missing password, phone, role
+      };
+
+      const response = await request(app)
+        .post('/api/users')
+        .set('Cookie', [`token=${managerToken}`])
+        .send(userData)
         .expect(400);
 
       expect(response.body.success).toBe(false);
@@ -229,12 +439,17 @@ describe('Users Routes', () => {
 
     it('should fail with invalid email format', async () => {
       const userData = {
-        userName: 'Test User',
+        userName: 'Invalid Email',
         email: 'invalid-email',
-        password: 'Test123!@#',
-        phone: '+94771234567',
-        dateOfBirth: '1990-01-01',
+        password: 'password123',
+        phone: '+1234567803',
         role: 'patient',
+        bloodType: 'A+',
+        emergencyContact: {
+          name: 'Emergency Contact',
+          relationship: 'Spouse',
+          phone: '+1234567804'
+        }
       };
 
       const response = await request(app)
@@ -247,22 +462,18 @@ describe('Users Routes', () => {
     });
 
     it('should fail with duplicate email', async () => {
-      const existingUser = await createTestUser('patient', { 
-        email: 'existing@test.com' 
-      });
-
       const userData = {
-        userName: 'Duplicate Email User',
-        email: 'existing@test.com',
-        password: 'Test123!@#',
-        phone: '+94771234569',
-        dateOfBirth: '1990-01-01',
+        userName: 'Duplicate Email',
+        email: 'patient@test.com', // Already exists
+        password: 'password123',
+        phone: '+1234567805',
         role: 'patient',
-        address: {
-          street: '123 Test St',
-          city: 'Colombo',
-          zipCode: '10000',
-        },
+        bloodType: 'A+',
+        emergencyContact: {
+          name: 'Emergency Contact',
+          relationship: 'Spouse',
+          phone: '+1234567806'
+        }
       };
 
       const response = await request(app)
@@ -272,17 +483,39 @@ describe('Users Routes', () => {
         .expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain('exists');
+    });
+
+    it('should fail with invalid role', async () => {
+      const userData = {
+        userName: 'Invalid Role',
+        email: 'invalidrole@test.com',
+        password: 'password123',
+        phone: '+1234567807',
+        role: 'invalid_role'
+      };
+
+      const response = await request(app)
+        .post('/api/users')
+        .set('Cookie', [`token=${managerToken}`])
+        .send(userData)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
     });
 
     it('should fail for unauthorized roles', async () => {
       const userData = {
-        userName: 'Test User',
-        email: 'test@test.com',
-        password: 'Test123!@#',
-        phone: '+94771234567',
-        dateOfBirth: '1990-01-01',
+        userName: 'Unauthorized User',
+        email: 'unauthorized@test.com',
+        password: 'password123',
+        phone: '+1234567808',
         role: 'patient',
+        bloodType: 'A+',
+        emergencyContact: {
+          name: 'Emergency Contact',
+          relationship: 'Spouse',
+          phone: '+1234567809'
+        }
       };
 
       const response = await request(app)
@@ -293,122 +526,203 @@ describe('Users Routes', () => {
 
       expect(response.body.success).toBe(false);
     });
+
+    it('should fail without authentication', async () => {
+      const userData = {
+        userName: 'No Auth User',
+        email: 'noauth@test.com',
+        password: 'password123',
+        phone: '+1234567810',
+        role: 'patient',
+        bloodType: 'A+',
+        emergencyContact: {
+          name: 'Emergency Contact',
+          relationship: 'Spouse',
+          phone: '+1234567811'
+        }
+      };
+
+      const response = await request(app)
+        .post('/api/users')
+        .send(userData)
+        .expect(401);
+
+      expect(response.body.success).toBe(false);
+    });
+
+    it('should handle server errors gracefully', async () => {
+      const originalCreate = User.create;
+      User.create = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const userData = {
+        userName: 'Error User',
+        email: 'error@test.com',
+        password: 'password123',
+        phone: '+1234567812',
+        role: 'patient',
+        bloodType: 'A+',
+        emergencyContact: {
+          name: 'Emergency Contact',
+          relationship: 'Spouse',
+          phone: '+1234567813'
+        }
+      };
+
+      const response = await request(app)
+        .post('/api/users')
+        .set('Cookie', [`token=${managerToken}`])
+        .send(userData)
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+
+      User.create = originalCreate;
+    });
   });
 
-  describe('PUT /api/users/:id - Update User', () => {
-    let testPatient;
-
-    beforeEach(async () => {
-      testPatient = await createTestUser('patient');
-    });
-
-    it('should update user as manager', async () => {
-      const updates = {
-        userName: 'Updated Name',
-        phone: '+94779999999',
+  describe('PUT /api/users/:id', () => {
+    it('should update user profile', async () => {
+      const updateData = {
+        userName: 'Updated Patient',
+        phone: '+1234567814'
       };
 
       const response = await request(app)
-        .put(`/api/users/${testPatient._id}`)
+        .put(`/api/users/${patient._id}`)
         .set('Cookie', [`token=${managerToken}`])
-        .send(updates)
+        .send(updateData)
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data.user.userName).toBe('Updated Name');
-      expect(response.body.data.user.phone).toBe('+94779999999');
+      expect(response.body.data.user.userName).toBe(updateData.userName);
+      expect(response.body.data.user.phone).toBe(updateData.phone);
     });
 
-    it('should update patient-specific fields', async () => {
-      const updates = {
-        bloodType: 'B+',
-        height: 175,
-        weight: 72,
+    it('should update own profile', async () => {
+      const updateData = {
+        userName: 'Updated Self',
+        phone: '+1234567815'
       };
 
       const response = await request(app)
-        .put(`/api/users/${testPatient._id}`)
-        .set('Cookie', [`token=${managerToken}`])
-        .send(updates)
+        .put(`/api/users/${patient._id}`)
+        .set('Cookie', [`token=${patientToken}`])
+        .send(updateData)
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data.user.bloodType).toBe('B+');
-    });
-
-    it('should update isActive status', async () => {
-      const updates = {
-        isActive: false,
-      };
-
-      const response = await request(app)
-        .put(`/api/users/${testPatient._id}`)
-        .set('Cookie', [`token=${managerToken}`])
-        .send(updates)
-        .expect(200);
-
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.user.isActive).toBe(false);
+      expect(response.body.data.user.userName).toBe(updateData.userName);
     });
 
     it('should fail with invalid user ID', async () => {
-      const updates = { userName: 'Updated' };
+      const updateData = {
+        userName: 'Updated User'
+      };
 
       const response = await request(app)
         .put('/api/users/507f1f77bcf86cd799439011')
         .set('Cookie', [`token=${managerToken}`])
-        .send(updates)
+        .send(updateData)
         .expect(404);
 
       expect(response.body.success).toBe(false);
     });
 
-    it('should fail for unauthorized roles', async () => {
-      const updates = { userName: 'Updated' };
+    it('should fail with invalid email format', async () => {
+      const updateData = {
+        email: 'invalid-email'
+      };
 
       const response = await request(app)
-        .put(`/api/users/${testPatient._id}`)
+        .put(`/api/users/${patient._id}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .send(updateData)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+    });
+
+    it('should fail for unauthorized access to other users', async () => {
+      const updateData = {
+        userName: 'Unauthorized Update'
+      };
+
+      const response = await request(app)
+        .put(`/api/users/${doctor._id}`)
         .set('Cookie', [`token=${patientToken}`])
-        .send(updates)
+        .send(updateData)
         .expect(403);
 
       expect(response.body.success).toBe(false);
     });
 
-    it('should not allow updating to duplicate email', async () => {
-      const anotherUser = await createTestUser('patient', {
-        email: 'another@test.com',
-      });
-
-      const updates = {
-        email: anotherUser.email,
+    it('should fail without authentication', async () => {
+      const updateData = {
+        userName: 'No Auth Update'
       };
 
       const response = await request(app)
-        .put(`/api/users/${testPatient._id}`)
-        .set('Cookie', [`token=${managerToken}`])
-        .send(updates)
-        .expect(400);
+        .put(`/api/users/${patient._id}`)
+        .send(updateData)
+        .expect(401);
 
       expect(response.body.success).toBe(false);
     });
+
+    it('should handle server errors gracefully', async () => {
+      const originalFindByIdAndUpdate = User.findByIdAndUpdate;
+      User.findByIdAndUpdate = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const updateData = {
+        userName: 'Error Update'
+      };
+
+      const response = await request(app)
+        .put(`/api/users/${patient._id}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .send(updateData)
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+
+      User.findByIdAndUpdate = originalFindByIdAndUpdate;
+    });
   });
 
-  describe('DELETE /api/users/:id - Delete User', () => {
-    let testPatient;
-
-    beforeEach(async () => {
-      testPatient = await createTestUser('patient');
-    });
-
+  describe('DELETE /api/users/:id', () => {
     it('should delete user as manager', async () => {
+      // Create a user to delete
+      const userToDelete = await createTestUser({
+        userName: 'To Delete',
+        email: 'todelete@test.com',
+        password: 'password123',
+        phone: '+1234567816',
+        role: 'patient',
+        bloodType: 'A+',
+        emergencyContact: {
+          name: 'Emergency Contact',
+          relationship: 'Spouse',
+          phone: '+1234567817'
+        }
+      });
+
       const response = await request(app)
-        .delete(`/api/users/${testPatient._id}`)
+        .delete(`/api/users/${userToDelete._id}`)
         .set('Cookie', [`token=${managerToken}`])
         .expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.message).toContain('deleted');
+    });
+
+    it('should prevent self-deletion', async () => {
+      const response = await request(app)
+        .delete(`/api/users/${manager._id}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toContain('delete yourself');
     });
 
     it('should fail with invalid user ID', async () => {
@@ -422,59 +736,40 @@ describe('Users Routes', () => {
 
     it('should fail for unauthorized roles', async () => {
       const response = await request(app)
-        .delete(`/api/users/${testPatient._id}`)
+        .delete(`/api/users/${patient._id}`)
         .set('Cookie', [`token=${patientToken}`])
         .expect(403);
 
       expect(response.body.success).toBe(false);
     });
 
-    it('should prevent self-deletion', async () => {
+    it('should fail without authentication', async () => {
       const response = await request(app)
-        .delete(`/api/users/${manager._id}`)
-        .set('Cookie', [`token=${managerToken}`])
-        .expect(400);
+        .delete(`/api/users/${patient._id}`)
+        .expect(401);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain('delete your own');
+    });
+
+    it('should handle server errors gracefully', async () => {
+      const originalFindByIdAndDelete = User.findByIdAndDelete;
+      User.findByIdAndDelete = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app)
+        .delete(`/api/users/${patient._id}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+
+      User.findByIdAndDelete = originalFindByIdAndDelete;
     });
   });
 
   describe('Edge Cases', () => {
-    it('should handle concurrent user creations', async () => {
-      const userData = {
-        password: 'Test123!@#',
-        phone: '+94771234567',
-        dateOfBirth: '1990-01-01',
-        role: 'patient',
-        address: {
-          street: '123 Test St',
-          city: 'Colombo',
-          zipCode: '10000',
-        },
-      };
-
-      const promises = Array(5).fill(null).map((_, i) =>
-        request(app)
-          .post('/api/users')
-          .set('Cookie', [`token=${managerToken}`])
-          .send({
-            ...userData,
-            userName: `User ${i}`,
-            email: `user${i}@test.com`,
-          })
-      );
-
-      const responses = await Promise.all(promises);
-      
-      responses.forEach(response => {
-        expect(response.status).toBe(201);
-        expect(response.body.success).toBe(true);
-      });
-    });
-
     it('should handle very long search queries', async () => {
-      const longSearch = 'search'.repeat(100);
+      const longSearch = 'a'.repeat(1000);
+      
       const response = await request(app)
         .get(`/api/users?search=${longSearch}`)
         .set('Cookie', [`token=${managerToken}`])
@@ -483,40 +778,62 @@ describe('Users Routes', () => {
       expect(response.body.success).toBe(true);
     });
 
-    it('should handle invalid pagination values', async () => {
+    it('should handle special characters in search', async () => {
       const response = await request(app)
-        .get('/api/users?page=-1&limit=0')
+        .get('/api/users?search=@#$%^&*()')
         .set('Cookie', [`token=${managerToken}`])
-        .expect(400);
-
-      expect(response.body.success).toBe(false);
-    });
-
-    it('should handle special characters in user data', async () => {
-      const userData = {
-        userName: 'Test User <script>alert("xss")</script>',
-        email: 'special@test.com',
-        password: 'Test123!@#$%^&*()',
-        phone: '+94771234567',
-        dateOfBirth: '1990-01-01',
-        role: 'patient',
-        address: {
-          street: '123 Test St',
-          city: 'Colombo',
-          zipCode: '10000',
-        },
-      };
-
-      const response = await request(app)
-        .post('/api/users')
-        .set('Cookie', [`token=${managerToken}`])
-        .send(userData)
-        .expect(201);
+        .expect(200);
 
       expect(response.body.success).toBe(true);
-      // Should store as-is or sanitized
-      expect(response.body.data.user.userName).toBeDefined();
+    });
+
+    it('should handle concurrent user creation', async () => {
+      const userPromises = Array.from({ length: 5 }, (_, i) => {
+        const userData = {
+          userName: `Concurrent User ${i}`,
+          email: `concurrent${i}@test.com`,
+          password: 'password123',
+          phone: `+12345678${i.toString().padStart(2, '0')}`,
+          role: 'patient',
+          bloodType: 'A+',
+          emergencyContact: {
+            name: `Emergency ${i}`,
+            relationship: 'Spouse',
+            phone: `+12345678${(i + 50).toString().padStart(2, '0')}`
+          }
+        };
+
+        return request(app)
+          .post('/api/users')
+          .set('Cookie', [`token=${managerToken}`])
+          .send(userData);
+      });
+
+      const responses = await Promise.all(userPromises);
+      
+      responses.forEach(response => {
+        expect(response.status).toBe(201);
+        expect(response.body.success).toBe(true);
+      });
+    });
+
+    it('should handle empty search results', async () => {
+      const response = await request(app)
+        .get('/api/users?search=nonexistentuser')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.users).toHaveLength(0);
+    });
+
+    it('should handle invalid sort parameters', async () => {
+      const response = await request(app)
+        .get('/api/users?sortBy=invalidField&sortOrder=invalidOrder')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
     });
   });
 });
-

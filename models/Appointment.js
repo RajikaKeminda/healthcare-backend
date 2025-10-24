@@ -4,7 +4,7 @@ const appointmentSchema = new mongoose.Schema({
   appointmentID: {
     type: String,
     unique: true,
-    required: true
+    required: false
   },
   patientID: {
     type: mongoose.Schema.Types.ObjectId,
@@ -108,7 +108,7 @@ const appointmentSchema = new mongoose.Schema({
 // Generate appointment ID before saving
 appointmentSchema.pre('save', async function(next) {
   if (!this.appointmentID) {
-    const count = await mongoose.models.Appointment.countDocuments();
+    const count = await this.constructor.countDocuments();
     this.appointmentID = `APT${String(count + 1).padStart(6, '0')}`;
   }
   next();

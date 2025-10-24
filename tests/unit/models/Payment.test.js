@@ -315,7 +315,11 @@ describe('Payment Model', () => {
         method: 'cash',
         status: 'completed',
         transactionReference: 'TXN013',
-        receiptNumber: 'RCP2024001',
+        receipt: {
+          generated: true,
+          receiptNumber: 'RCP2024001',
+          generatedAt: new Date(),
+        },
         billingDetails: {
           services: [{
             serviceName: 'Consultation',
@@ -330,7 +334,7 @@ describe('Payment Model', () => {
         },
       });
 
-      expect(payment.receiptNumber).toBe('RCP2024001');
+      expect(payment.receipt.receiptNumber).toBe('RCP2024001');
     });
   });
 
@@ -344,11 +348,12 @@ describe('Payment Model', () => {
         method: 'cash',
         status: 'completed',
         transactionReference: 'TXN014',
-        refundInfo: {
-          amount: 500,
-          reason: 'Partial refund requested',
-          status: 'processed',
-          processedAt: new Date(),
+        refund: {
+          refundAmount: 500,
+          refundReason: 'Partial refund requested',
+          refundedAt: new Date(),
+          refundMethod: 'cash',
+          refundReference: 'REF001',
         },
         billingDetails: {
           services: [{
@@ -364,9 +369,8 @@ describe('Payment Model', () => {
         },
       });
 
-      expect(payment.refundInfo.amount).toBe(500);
-      expect(payment.refundInfo.reason).toBe('Partial refund requested');
-      expect(payment.refundInfo.status).toBe('processed');
+      expect(payment.refund.refundAmount).toBe(500);
+      expect(payment.refund.refundReason).toBe('Partial refund requested');
     });
   });
 
@@ -602,6 +606,110 @@ describe('Payment Model', () => {
 
       const updated = await Payment.findById(payment._id);
       expect(updated.processedBy.toString()).toBe(staff._id.toString());
+    });
+  });
+
+  describe('Error Cases', () => {
+    it('should fail when creating payment with invalid patient ID', async () => {
+      const paymentData = {
+        paymentID: 'PAY_ERROR001',
+        patientID: 'invalid-patient-id',
+        hospitalID: hospital._id,
+        amount: 2000,
+        method: 'cash',
+        transactionReference: 'TXN_ERROR001',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
+      };
+
+      await expect(Payment.create(paymentData)).rejects.toThrow();
+    });
+
+    it('should fail when creating payment with invalid hospital ID', async () => {
+      const paymentData = {
+        paymentID: 'PAY_ERROR002',
+        patientID: patient._id,
+        hospitalID: 'invalid-hospital-id',
+        amount: 2000,
+        method: 'cash',
+        transactionReference: 'TXN_ERROR002',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
+      };
+
+      await expect(Payment.create(paymentData)).rejects.toThrow();
+    });
+
+    it('should fail when updating payment with invalid status', async () => {
+      const payment = await Payment.create({
+        paymentID: 'PAY_ERROR003',
+        patientID: patient._id,
+        hospitalID: hospital._id,
+        amount: 2000,
+        method: 'cash',
+        status: 'pending',
+        transactionReference: 'TXN_ERROR003',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
+      });
+
+      payment.status = 'invalid_status';
+      await expect(payment.save()).rejects.toThrow();
+    });
+
+    it('should fail when creating payment with negative amount', async () => {
+      const paymentData = {
+        paymentID: 'PAY_ERROR004',
+        patientID: patient._id,
+        hospitalID: hospital._id,
+        amount: -1000,
+        method: 'cash',
+        transactionReference: 'TXN_ERROR004',
+        billingDetails: {
+          services: [{
+            serviceName: 'Consultation',
+            unitPrice: 2000,
+            quantity: 1,
+            totalPrice: 2000,
+          }],
+          subtotal: 2000,
+          tax: 0,
+          discount: 0,
+          total: 2000,
+        },
+      };
+
+      await expect(Payment.create(paymentData)).rejects.toThrow();
     });
   });
 });

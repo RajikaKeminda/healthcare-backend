@@ -20,7 +20,6 @@ const generateToken = (userId, role = 'patient') => {
 // Create test user fixtures
 const createTestUser = async (role = 'patient', overrides = {}) => {
   const baseData = {
-    patientID: `PAT${Date.now()}`,
     userName: `test_${role}_${Date.now()}`,
     email: `test_${role}_${Date.now()}@test.com`,
     password: 'Test123!@#',
@@ -33,36 +32,6 @@ const createTestUser = async (role = 'patient', overrides = {}) => {
       state: 'Western',
       zipCode: '10000',
       country: 'Sri Lanka',
-    },
-    workingHours: {
-      Monday: {
-        open: '09:00',
-        close: '17:00',
-      },
-      Tuesday: {
-        open: '09:00',
-        close: '17:00',
-      },
-      Wednesday: {
-        open: '09:00',
-        close: '17:00',
-      },
-      Thursday: {
-        open: '09:00',
-        close: '17:00',
-      },
-      Friday: {
-        open: '09:00',
-        close: '17:00',
-      },
-      Saturday: {
-        open: '09:00',
-        close: '17:00',
-      },
-      Sunday: {
-        open: '09:00',
-        close: '17:00',
-      },
     },
     ...overrides,
   };
@@ -108,10 +77,16 @@ const createTestUser = async (role = 'patient', overrides = {}) => {
       });
       break;
     case 'healthcare_manager':
-      user = await User.create(baseData);
+      user = await User.create({
+        ...baseData,
+        role: 'healthcare_manager'
+      });
       break;
     default:
-      user = await User.create(baseData);
+      user = await User.create({
+        ...baseData,
+        role: 'patient'
+      });
   }
 
   return user;
@@ -122,7 +97,7 @@ const createTestHospital = async (overrides = {}) => {
   return await Hospital.create({
     hospitalID: `HOS${Date.now()}`,
     name: `Test Hospital ${Date.now()}`,
-    type: 'private',
+    type: 'public',
     address: {
       street: '456 Hospital Ave',
       city: 'Colombo',
@@ -130,18 +105,18 @@ const createTestHospital = async (overrides = {}) => {
       zipCode: '10100',
       country: 'Sri Lanka',
     },
-    contactInfo: {
-      phone: '+94112345678',
-      email: 'hospital@test.com',
-      website: 'https://testhospital.com',
-    },
-    departments: ['Cardiology', 'Neurology', 'Pediatrics'],
     capacity: {
       totalBeds: 100,
       occupiedBeds: 50,
       icuBeds: 10,
       emergencyBeds: 15,
     },
+    contactInfo: {
+      phone: '+94112345678',
+      email: 'hospital@test.com',
+      website: 'https://testhospital.com',
+    },
+    specializations: ['Cardiology', 'Neurology', 'Pediatrics'],
     facilities: ['emergency', 'icu', 'laboratory'],
     ...overrides,
   });
@@ -158,7 +133,7 @@ const createTestAppointment = async (patient, doctor, hospital, overrides = {}) 
     time: '10:00',
     type: 'consultation',
     status: 'scheduled',
-    symptoms: 'Test symptoms',
+    symptoms: ['Test symptoms'],
     reservationFee: {
       amount: 1000,
       paid: false,
@@ -226,9 +201,35 @@ const createTestMedicalRecord = async (patient, doctor, hospital, overrides = {}
   });
 };
 
+// Create a basic User (not a discriminator)
+const createBasicUser = async (overrides = {}) => {
+  // Create a User without using discriminators
+  const userData = {
+    userName: `test_user_${Date.now()}`,
+    email: `test_user_${Date.now()}@test.com`,
+    password: 'Test123!@#',
+    phone: '+94771234567',
+    dateOfBirth: new Date('1990-01-01'),
+    role: 'healthcare_manager', // This role doesn't have a discriminator
+    address: {
+      street: '123 Test St',
+      city: 'Colombo',
+      state: 'Western',
+      zipCode: '10000',
+      country: 'Sri Lanka',
+    },
+    ...overrides,
+  };
+  
+  // Use new User() instead of User.create() to avoid discriminator issues
+  const user = new User(userData);
+  return await user.save();
+};
+
 module.exports = {
   generateToken,
   createTestUser,
+  createBasicUser,
   createTestHospital,
   createTestAppointment,
   createTestPayment,

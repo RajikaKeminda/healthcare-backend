@@ -1,5 +1,5 @@
 const Appointment = require('../../../models/Appointment');
-const { createTestUser, createTestHospital } = require('../../utils/testHelpers');
+const { createTestUser, createTestHospital, createTestAppointment } = require('../../utils/testHelpers');
 
 require('../../setup');
 
@@ -14,26 +14,15 @@ describe('Appointment Model', () => {
 
   describe('Appointment Creation', () => {
     it('should create a valid appointment with required fields', async () => {
-      const appointmentData = {
-        appointmentID: 'APT001',
-        patientID: patient._id,
-        doctorID: doctor._id,
-        hospitalID: hospital._id,
-        date: new Date('2025-12-01'),
-        time: '10:00',
-        type: 'consultation',
-        status: 'scheduled',
-      };
-
-      const appointment = await Appointment.create(appointmentData);
+      const appointment = await createTestAppointment(patient, doctor, hospital);
 
       expect(appointment).toBeDefined();
-      expect(appointment.appointmentID).toBe('APT001');
       expect(appointment.patientID.toString()).toBe(patient._id.toString());
       expect(appointment.doctorID.toString()).toBe(doctor._id.toString());
       expect(appointment.hospitalID.toString()).toBe(hospital._id.toString());
       expect(appointment.type).toBe('consultation');
       expect(appointment.status).toBe('scheduled');
+      expect(appointment.reservationFee.amount).toBe(1000);
     });
 
     it('should fail without required fields', async () => {
@@ -54,6 +43,12 @@ describe('Appointment Model', () => {
         date: new Date('2025-12-01'),
         time: '10:00',
         type: 'consultation',
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
       };
 
       await Appointment.create(appointmentData);
@@ -71,6 +66,12 @@ describe('Appointment Model', () => {
         date: new Date('2025-12-01'),
         time: '10:00',
         type: 'consultation',
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
       });
 
       expect(appointment.status).toBe('scheduled');
@@ -85,6 +86,12 @@ describe('Appointment Model', () => {
         date: new Date('2025-12-01'),
         time: '10:00',
         type: 'invalid_type',
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
       };
 
       await expect(Appointment.create(appointmentData)).rejects.toThrow();
@@ -100,6 +107,12 @@ describe('Appointment Model', () => {
         time: '10:00',
         type: 'consultation',
         status: 'invalid_status',
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
       };
 
       await expect(Appointment.create(appointmentData)).rejects.toThrow();
@@ -117,6 +130,12 @@ describe('Appointment Model', () => {
         time: '10:00',
         type: 'consultation',
         status: 'scheduled',
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
       });
 
       appointment.status = 'completed';
@@ -136,15 +155,25 @@ describe('Appointment Model', () => {
         time: '10:00',
         type: 'consultation',
         status: 'scheduled',
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
       });
 
       appointment.status = 'cancelled';
-      appointment.cancellationReason = 'Patient requested';
+      appointment.cancellation = {
+        cancelledBy: 'patient',
+        reason: 'Patient requested',
+        cancelledAt: new Date()
+      };
       await appointment.save();
 
       const updated = await Appointment.findById(appointment._id);
       expect(updated.status).toBe('cancelled');
-      expect(updated.cancellationReason).toBe('Patient requested');
+      expect(updated.cancellation.reason).toBe('Patient requested');
     });
   });
 
@@ -159,6 +188,12 @@ describe('Appointment Model', () => {
         date: pastDate,
         time: '10:00',
         type: 'consultation',
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
       });
 
       expect(appointment.date).toEqual(pastDate);
@@ -176,6 +211,12 @@ describe('Appointment Model', () => {
           date: new Date('2025-12-01'),
           time,
           type: 'consultation',
+          reservationFee: {
+            amount: 1000,
+            paid: false,
+            paymentDate: null,
+            paymentMethod: null,
+          },
         });
 
         expect(appointment.time).toBe(time);
@@ -192,11 +233,17 @@ describe('Appointment Model', () => {
         date: new Date('2025-12-01'),
         time: '10:00',
         type: 'consultation',
-        symptoms: longText,
+        symptoms: [longText],
         notes: longText,
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
       });
 
-      expect(appointment.symptoms).toBe(longText);
+      expect(appointment.symptoms).toEqual([longText]);
       expect(appointment.notes).toBe(longText);
     });
   });
@@ -211,6 +258,12 @@ describe('Appointment Model', () => {
         date: new Date('2025-12-01'),
         time: '10:00',
         type: 'consultation',
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
       });
 
       const populated = await Appointment.findById(appointment._id)
@@ -229,13 +282,19 @@ describe('Appointment Model', () => {
         date: new Date('2025-12-01'),
         time: '10:00',
         type: 'consultation',
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
       });
 
       const populated = await Appointment.findById(appointment._id)
-        .populate('doctorID', 'userName specialization');
+        .populate('doctorID');
 
       expect(populated.doctorID.userName).toBe(doctor.userName);
-      expect(populated.doctorID.specialization).toBe(doctor.specialization);
+      expect(populated.doctorID.specialization).toBe('General Medicine');
     });
 
     it('should populate hospital details', async () => {
@@ -259,6 +318,12 @@ describe('Appointment Model', () => {
         tax: 0,
         discount: 0,
         total: 2000,
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
       });
 
       const populated = await Appointment.findById(appointment._id)
@@ -266,6 +331,90 @@ describe('Appointment Model', () => {
 
       expect(populated.hospitalID.name).toBe(hospital.name);
       expect(populated.hospitalID.address).toBeDefined();
+    });
+  });
+
+  describe('Error Cases', () => {
+    it('should fail when creating appointment with invalid patient ID', async () => {
+      const appointmentData = {
+        appointmentID: 'APT_ERROR001',
+        patientID: 'invalid-patient-id',
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'consultation',
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
+      };
+
+      await expect(Appointment.create(appointmentData)).rejects.toThrow();
+    });
+
+    it('should fail when creating appointment with invalid doctor ID', async () => {
+      const appointmentData = {
+        appointmentID: 'APT_ERROR002',
+        patientID: patient._id,
+        doctorID: 'invalid-doctor-id',
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'consultation',
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
+      };
+
+      await expect(Appointment.create(appointmentData)).rejects.toThrow();
+    });
+
+    it('should fail when updating appointment with invalid status', async () => {
+      const appointment = await Appointment.create({
+        appointmentID: 'APT_ERROR003',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '10:00',
+        type: 'consultation',
+        status: 'scheduled',
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
+      });
+
+      appointment.status = 'invalid_status';
+      await expect(appointment.save()).rejects.toThrow();
+    });
+
+    it('should fail when creating appointment with invalid time format', async () => {
+      const appointmentData = {
+        appointmentID: 'APT_ERROR004',
+        patientID: patient._id,
+        doctorID: doctor._id,
+        hospitalID: hospital._id,
+        date: new Date('2025-12-01'),
+        time: '25:70', // Invalid time format
+        type: 'consultation',
+        reservationFee: {
+          amount: 1000,
+          paid: false,
+          paymentDate: null,
+          paymentMethod: null,
+        },
+      };
+
+      await expect(Appointment.create(appointmentData)).rejects.toThrow();
     });
   });
 });

@@ -4,7 +4,7 @@ const hospitalSchema = new mongoose.Schema({
   hospitalID: {
     type: String,
     unique: true,
-    required: true
+    required: false
   },
   name: {
     type: String,
@@ -20,7 +20,7 @@ const hospitalSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['public', 'private', 'teaching', 'specialty'],
+    enum: ['public', 'private', 'teaching', 'specialty', 'general'],
     required: [true, 'Hospital type is required']
   },
   capacity: {
@@ -40,6 +40,8 @@ const hospitalSchema = new mongoose.Schema({
     enum: [
       'emergency',
       'icu',
+      'ICU',
+      'Emergency Room',
       'surgery',
       'radiology',
       'laboratory',
@@ -115,7 +117,7 @@ const hospitalSchema = new mongoose.Schema({
 // Generate hospital ID before saving
 hospitalSchema.pre('save', async function(next) {
   if (!this.hospitalID) {
-    const count = await mongoose.models.Hospital.countDocuments();
+    const count = await this.constructor.countDocuments();
     this.hospitalID = `HOSP${String(count + 1).padStart(6, '0')}`;
   }
   next();

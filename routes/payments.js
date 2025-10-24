@@ -351,6 +351,14 @@ router.post('/:paymentID/receipt', verifyToken, [
       });
     }
 
+    // Check if payment is completed
+    if (payment.status !== 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Receipt can only be generated for completed payments'
+      });
+    }
+
     // Generate receipt number if not exists
     if (!payment.receipt.receiptNumber) {
       const count = await Payment.countDocuments({ 'receipt.receiptNumber': { $exists: true } });

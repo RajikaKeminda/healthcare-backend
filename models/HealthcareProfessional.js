@@ -5,7 +5,7 @@ const healthcareProfessionalSchema = new mongoose.Schema({
   professionalID: {
     type: String,
     unique: true,
-    required: true
+    required: false
   },
   specialization: {
     type: String,
@@ -84,7 +84,7 @@ const healthcareProfessionalSchema = new mongoose.Schema({
 // Generate professional ID before saving
 healthcareProfessionalSchema.pre('save', async function(next) {
   if (!this.professionalID) {
-    const count = await mongoose.models.HealthcareProfessional.countDocuments();
+    const count = await this.constructor.countDocuments();
     this.professionalID = `DOC${String(count + 1).padStart(6, '0')}`;
   }
   next();

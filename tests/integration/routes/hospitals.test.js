@@ -1,6 +1,6 @@
 const request = require('supertest');
 const app = require('../../../app');
-const { createTestUser, createTestHospital, generateToken } = require('../../utils/testHelpers');
+const { createTestUser, createTestHospital, createTestAppointment, createBasicUser, generateToken } = require('../../utils/testHelpers');
 
 require('../../setup');
 
@@ -8,7 +8,7 @@ describe('Hospitals Routes', () => {
   let manager, staff, patient, managerToken, staffToken, patientToken;
 
   beforeEach(async () => {
-    manager = await createTestUser('healthcare_manager');
+    manager = await createBasicUser();
     staff = await createTestUser('hospital_staff');
     patient = await createTestUser('patient');
     
@@ -452,21 +452,772 @@ describe('Hospitals Routes', () => {
     });
   });
 
+  // Additional tests to cover specific lines mentioned
+  describe('GET /api/hospitals - Enhanced Coverage (Lines 17-59)', () => {
+    beforeEach(async () => {
+      // Create test hospitals with different types
+      await createTestHospital({ 
+        name: 'Public Hospital', 
+        type: 'public',
+        address: { street: '123 Main St', city: 'Colombo', state: 'Western', zipCode: '10000' },
+        specializations: ['Cardiology', 'Neurology']
+      });
+      await createTestHospital({ 
+        name: 'Private Clinic', 
+        type: 'private',
+        address: { street: '456 Oak Ave', city: 'Kandy', state: 'Central', zipCode: '20000' },
+        specializations: ['Dermatology']
+      });
+      await createTestHospital({ 
+        name: 'Teaching Hospital', 
+        type: 'teaching',
+        address: { street: '789 Pine St', city: 'Colombo', state: 'Western', zipCode: '10001' },
+        specializations: ['General Medicine', 'Surgery']
+      });
+    });
+
+    it('should validate query parameters correctly', async () => {
+      // Test invalid page parameter
+      const response1 = await request(app)
+        .get('/api/hospitals?page=0')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(400);
+
+      expect(response1.body.success).toBe(false);
+      expect(response1.body.message).toBe('Validation failed');
+
+      // Test invalid limit parameter
+      const response2 = await request(app)
+        .get('/api/hospitals?limit=101')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(400);
+
+      expect(response2.body.success).toBe(false);
+      expect(response2.body.message).toBe('Validation failed');
+
+      // Test invalid type parameter
+      const response3 = await request(app)
+        .get('/api/hospitals?type=invalid')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(400);
+
+      expect(response3.body.success).toBe(false);
+      expect(response3.body.message).toBe('Validation failed');
+    });
+
+    it('should filter by hospital type correctly', async () => {
+      const response = await request(app)
+        .get('/api/hospitals?type=public')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.hospitals.every(h => h.type === 'public')).toBe(true);
+    });
+
+    it('should filter by city with case-insensitive search', async () => {
+      const response = await request(app)
+        .get('/api/hospitals?city=colombo')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.hospitals.every(h => 
+        h.address.city.toLowerCase().includes('colombo')
+      )).toBe(true);
+    });
+
+    it('should filter by specialization', async () => {
+      const response = await request(app)
+        .get('/api/hospitals?specialization=Cardiology')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.hospitals.some(h => 
+        h.specializations && h.specializations.includes('Cardiology')
+      )).toBe(true);
+    });
+
+    it('should handle pagination correctly', async () => {
+      const response = await request(app)
+        .get('/api/hospitals?page=1&limit=2')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.hospitals.length).toBeLessThanOrEqual(2);
+      expect(response.body.data.pagination.currentPage).toBe(1);
+      expect(response.body.data.pagination.itemsPerPage).toBe(2);
+      expect(response.body.data.pagination.totalPages).toBeGreaterThan(0);
+    });
+
+    it('should sort hospitals by name', async () => {
+      const response = await request(app)
+        .get('/api/hospitals')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      const hospitals = response.body.data.hospitals;
+      for (let i = 1; i < hospitals.length; i++) {
+        expect(hospitals[i-1].name <= hospitals[i].name).toBe(true);
+      }
+    });
+
+    it('should handle server errors gracefully', async () => {
+      // Mock Hospital.find to throw an error
+      const originalFind = require('../../../models/Hospital').find;
+      require('../../../models/Hospital').find = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app)
+        .get('/api/hospitals')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Server error while fetching hospitals');
+
+      // Restore original function
+      require('../../../models/Hospital').find = originalFind;
+    });
+  });
+
+  describe('GET /api/hospitals/:hospitalID - Enhanced Coverage (Lines 69-87)', () => {
+    let hospital;
+
+    beforeEach(async () => {
+      hospital = await createTestHospital({
+        name: 'Test Hospital',
+        type: 'public',
+        address: {
+          street: '123 Test St',
+          city: 'Colombo',
+          state: 'Western',
+          zipCode: '10000'
+        },
+        contactInfo: {
+          phone: '+94112345678',
+          email: 'test@hospital.lk'
+        },
+        specializations: ['Cardiology', 'Neurology'],
+        facilities: ['ICU', 'Emergency Room']
+      });
+    });
+
+    it('should get hospital by ID with authentication', async () => {
+      const response = await request(app)
+        .get(`/api/hospitals/${hospital._id}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.hospital._id).toBe(hospital._id.toString());
+      expect(response.body.data.hospital.name).toBe('Test Hospital');
+      expect(response.body.data.hospital.type).toBe('public');
+    });
+
+    it('should return 404 for non-existent hospital', async () => {
+      const fakeId = '507f1f77bcf86cd799439011';
+      const response = await request(app)
+        .get(`/api/hospitals/${fakeId}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Hospital not found');
+    });
+
+    it('should handle invalid ObjectId format', async () => {
+      const response = await request(app)
+        .get('/api/hospitals/invalid-id')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Server error while fetching hospital');
+    });
+
+    it('should handle server errors gracefully', async () => {
+      // Mock Hospital.findById to throw an error
+      const originalFindById = require('../../../models/Hospital').findById;
+      require('../../../models/Hospital').findById = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app)
+        .get(`/api/hospitals/${hospital._id}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Server error while fetching hospital');
+
+      // Restore original function
+      require('../../../models/Hospital').findById = originalFindById;
+    });
+  });
+
+  describe('GET /api/hospitals/:hospitalID/doctors - Enhanced Coverage (Lines 100-150)', () => {
+    let hospital, doctor1, doctor2;
+
+    beforeEach(async () => {
+      hospital = await createTestHospital({
+        name: 'Test Hospital',
+        specializations: ['Cardiology', 'Neurology']
+      });
+
+      doctor1 = await createTestUser('healthcare_professional', {
+        specialization: 'Cardiology',
+        isAvailable: true,
+        workingHours: { start: '09:00', end: '17:00' },
+        bio: 'Experienced cardiologist',
+        languages: ['English', 'Sinhala']
+      });
+
+      doctor2 = await createTestUser('healthcare_professional', {
+        specialization: 'Neurology',
+        isAvailable: false,
+        workingHours: { start: '08:00', end: '16:00' },
+        bio: 'Neurology specialist',
+        languages: ['English']
+      });
+    });
+
+    it('should get doctors by hospital with validation', async () => {
+      const response = await request(app)
+        .get(`/api/hospitals/${hospital._id}/doctors`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.hospital.id).toBe(hospital._id.toString());
+      expect(response.body.data.hospital.name).toBe('Test Hospital');
+      expect(response.body.data.doctors).toBeInstanceOf(Array);
+    });
+
+    it('should validate query parameters for doctors endpoint', async () => {
+      // Test invalid available parameter
+      const response = await request(app)
+        .get(`/api/hospitals/${hospital._id}/doctors?available=invalid`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should filter doctors by specialization', async () => {
+      const response = await request(app)
+        .get(`/api/hospitals/${hospital._id}/doctors?specialization=Cardiology`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.doctors.every(d => d.specialization === 'Cardiology')).toBe(true);
+    });
+
+    it('should filter doctors by availability', async () => {
+      const response = await request(app)
+        .get(`/api/hospitals/${hospital._id}/doctors?available=true`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.doctors.every(d => d.isAvailable === true)).toBe(true);
+    });
+
+    it('should return 404 for non-existent hospital', async () => {
+      const fakeId = '507f1f77bcf86cd799439011';
+      const response = await request(app)
+        .get(`/api/hospitals/${fakeId}/doctors`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Hospital not found');
+    });
+
+    it('should select only required doctor fields', async () => {
+      const response = await request(app)
+        .get(`/api/hospitals/${hospital._id}/doctors`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      const doctor = response.body.data.doctors[0];
+      expect(doctor).toHaveProperty('userName');
+      expect(doctor).toHaveProperty('email');
+      expect(doctor).toHaveProperty('specialization');
+      expect(doctor).toHaveProperty('consultationFee');
+      expect(doctor).toHaveProperty('isAvailable');
+      expect(doctor).toHaveProperty('workingHours');
+      expect(doctor).toHaveProperty('bio');
+      expect(doctor).toHaveProperty('languages');
+      expect(doctor).not.toHaveProperty('password');
+    });
+
+    it('should sort doctors by specialization and name', async () => {
+      const response = await request(app)
+        .get(`/api/hospitals/${hospital._id}/doctors`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      const doctors = response.body.data.doctors;
+      for (let i = 1; i < doctors.length; i++) {
+        const prev = doctors[i-1];
+        const curr = doctors[i];
+        expect(prev.specialization <= curr.specialization).toBe(true);
+        if (prev.specialization === curr.specialization) {
+          expect(prev.userName <= curr.userName).toBe(true);
+        }
+      }
+    });
+
+    it('should handle server errors gracefully', async () => {
+      // Mock Hospital.findById to throw an error
+      const originalFindById = require('../../../models/Hospital').findById;
+      require('../../../models/Hospital').findById = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app)
+        .get(`/api/hospitals/${hospital._id}/doctors`)
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Server error while fetching hospital doctors');
+
+      // Restore original function
+      require('../../../models/Hospital').findById = originalFindById;
+    });
+  });
+
+  describe('POST /api/hospitals - Enhanced Coverage (Lines 170-192)', () => {
+    it('should validate all required fields', async () => {
+      const hospitalData = {
+        name: 'Test Hospital',
+        type: 'public',
+        address: {
+          street: '123 Test St',
+          city: 'Colombo',
+          state: 'Western',
+          zipCode: '10000',
+          country: 'Sri Lanka'
+        },
+        contactInfo: {
+          phone: '+94112345678',
+          email: 'test@hospital.lk'
+        },
+        capacity: {
+          totalBeds: 100,
+          occupiedBeds: 50,
+          icuBeds: 10,
+          emergencyBeds: 5
+        }
+      };
+
+      const response = await request(app)
+        .post('/api/hospitals')
+        .set('Cookie', [`token=${managerToken}`])
+        .send(hospitalData)
+        .expect(201);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('Hospital created successfully');
+      expect(response.body.data.hospital.name).toBe('Test Hospital');
+      expect(response.body.data.hospital.type).toBe('public');
+    });
+
+    it('should validate hospital name is required', async () => {
+      const hospitalData = {
+        type: 'public',
+        address: {
+          street: '123 Test St',
+          city: 'Colombo',
+          state: 'Western',
+          zipCode: '10000'
+        },
+        contactInfo: {
+          phone: '+94112345678',
+          email: 'test@hospital.lk'
+        },
+        capacity: { totalBeds: 100 }
+      };
+
+      const response = await request(app)
+        .post('/api/hospitals')
+        .set('Cookie', [`token=${managerToken}`])
+        .send(hospitalData)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should validate hospital type is valid', async () => {
+      const hospitalData = {
+        name: 'Test Hospital',
+        type: 'invalid_type',
+        address: {
+          street: '123 Test St',
+          city: 'Colombo',
+          state: 'Western',
+          zipCode: '10000'
+        },
+        contactInfo: {
+          phone: '+94112345678',
+          email: 'test@hospital.lk'
+        },
+        capacity: { totalBeds: 100 }
+      };
+
+      const response = await request(app)
+        .post('/api/hospitals')
+        .set('Cookie', [`token=${managerToken}`])
+        .send(hospitalData)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should validate address fields are required', async () => {
+      const hospitalData = {
+        name: 'Test Hospital',
+        type: 'public',
+        address: {
+          street: '123 Test St',
+          // Missing city, state, zipCode
+        },
+        contactInfo: {
+          phone: '+94112345678',
+          email: 'test@hospital.lk'
+        },
+        capacity: { totalBeds: 100 }
+      };
+
+      const response = await request(app)
+        .post('/api/hospitals')
+        .set('Cookie', [`token=${managerToken}`])
+        .send(hospitalData)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should validate contact info fields', async () => {
+      const hospitalData = {
+        name: 'Test Hospital',
+        type: 'public',
+        address: {
+          street: '123 Test St',
+          city: 'Colombo',
+          state: 'Western',
+          zipCode: '10000'
+        },
+        contactInfo: {
+          phone: '+94112345678',
+          email: 'invalid-email'
+        },
+        capacity: { totalBeds: 100 }
+      };
+
+      const response = await request(app)
+        .post('/api/hospitals')
+        .set('Cookie', [`token=${managerToken}`])
+        .send(hospitalData)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should validate capacity totalBeds is positive integer', async () => {
+      const hospitalData = {
+        name: 'Test Hospital',
+        type: 'public',
+        address: {
+          street: '123 Test St',
+          city: 'Colombo',
+          state: 'Western',
+          zipCode: '10000'
+        },
+        contactInfo: {
+          phone: '+94112345678',
+          email: 'test@hospital.lk'
+        },
+        capacity: { totalBeds: 0 }
+      };
+
+      const response = await request(app)
+        .post('/api/hospitals')
+        .set('Cookie', [`token=${managerToken}`])
+        .send(hospitalData)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should handle server errors gracefully', async () => {
+      const hospitalData = {
+        name: 'Test Hospital',
+        type: 'public',
+        address: {
+          street: '123 Test St',
+          city: 'Colombo',
+          state: 'Western',
+          zipCode: '10000'
+        },
+        contactInfo: {
+          phone: '+94112345678',
+          email: 'test@hospital.lk'
+        },
+        capacity: { totalBeds: 100 }
+      };
+
+      // Mock Hospital.save to throw an error
+      const originalSave = require('../../../models/Hospital').prototype.save;
+      require('../../../models/Hospital').prototype.save = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app)
+        .post('/api/hospitals')
+        .set('Cookie', [`token=${managerToken}`])
+        .send(hospitalData)
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Server error while creating hospital');
+
+      // Restore original function
+      require('../../../models/Hospital').prototype.save = originalSave;
+    });
+  });
+
+  describe('PUT /api/hospitals/:hospitalID - Enhanced Coverage (Lines 206-240)', () => {
+    let hospital;
+
+    beforeEach(async () => {
+      hospital = await createTestHospital({
+        name: 'Original Hospital',
+        type: 'public',
+        contactInfo: {
+          phone: '+94112345678',
+          email: 'original@hospital.lk'
+        }
+      });
+    });
+
+    it('should validate optional fields when provided', async () => {
+      const updates = {
+        name: 'Updated Hospital Name',
+        type: 'private',
+        contactInfo: {
+          email: 'updated@hospital.lk'
+        }
+      };
+
+      const response = await request(app)
+        .put(`/api/hospitals/${hospital._id}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .send(updates)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('Hospital updated successfully');
+      expect(response.body.data.hospital.name).toBe('Updated Hospital Name');
+      expect(response.body.data.hospital.type).toBe('private');
+    });
+
+    it('should validate hospital name cannot be empty', async () => {
+      const updates = {
+        name: ''
+      };
+
+      const response = await request(app)
+        .put(`/api/hospitals/${hospital._id}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .send(updates)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should validate hospital type is valid when provided', async () => {
+      const updates = {
+        type: 'invalid_type'
+      };
+
+      const response = await request(app)
+        .put(`/api/hospitals/${hospital._id}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .send(updates)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should validate email format when provided', async () => {
+      const updates = {
+        contactInfo: {
+          email: 'invalid-email'
+        }
+      };
+
+      const response = await request(app)
+        .put(`/api/hospitals/${hospital._id}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .send(updates)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Validation failed');
+    });
+
+    it('should return 404 for non-existent hospital', async () => {
+      const fakeId = '507f1f77bcf86cd799439011';
+      const updates = { name: 'Updated Name' };
+
+      const response = await request(app)
+        .put(`/api/hospitals/${fakeId}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .send(updates)
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Hospital not found');
+    });
+
+    it('should handle server errors gracefully', async () => {
+      const updates = { name: 'Updated Name' };
+
+      // Mock Hospital.findByIdAndUpdate to throw an error
+      const originalFindByIdAndUpdate = require('../../../models/Hospital').findByIdAndUpdate;
+      require('../../../models/Hospital').findByIdAndUpdate = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app)
+        .put(`/api/hospitals/${hospital._id}`)
+        .set('Cookie', [`token=${managerToken}`])
+        .send(updates)
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Server error while updating hospital');
+
+      // Restore original function
+      require('../../../models/Hospital').findByIdAndUpdate = originalFindByIdAndUpdate;
+    });
+  });
+
+  describe('GET /api/hospitals/specializations/list - Enhanced Coverage (Lines 250-263)', () => {
+    beforeEach(async () => {
+      // Create healthcare professionals with different specializations
+      await createTestUser('healthcare_professional', {
+        specialization: 'Cardiology',
+        isActive: true
+      });
+      await createTestUser('healthcare_professional', {
+        specialization: 'Neurology',
+        isActive: true
+      });
+      await createTestUser('healthcare_professional', {
+        specialization: 'Dermatology',
+        isActive: true
+      });
+      await createTestUser('healthcare_professional', {
+        specialization: 'Cardiology', // Duplicate specialization
+        isActive: true
+      });
+      await createTestUser('healthcare_professional', {
+        specialization: 'Inactive Specialty',
+        isActive: false // Should not be included
+      });
+    });
+
+    it('should get list of specializations', async () => {
+      const response = await request(app)
+        .get('/api/hospitals/specializations/list')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.specializations).toBeInstanceOf(Array);
+      expect(response.body.data.specializations.length).toBeGreaterThan(0);
+    });
+
+    it('should return unique specializations only', async () => {
+      const response = await request(app)
+        .get('/api/hospitals/specializations/list')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      const specializations = response.body.data.specializations;
+      const uniqueSpecializations = [...new Set(specializations)];
+      expect(specializations.length).toBe(uniqueSpecializations.length);
+    });
+
+    it('should return specializations sorted alphabetically', async () => {
+      const response = await request(app)
+        .get('/api/hospitals/specializations/list')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      const specializations = response.body.data.specializations;
+      for (let i = 1; i < specializations.length; i++) {
+        expect(specializations[i-1] <= specializations[i]).toBe(true);
+      }
+    });
+
+    it('should only include active healthcare professionals', async () => {
+      const response = await request(app)
+        .get('/api/hospitals/specializations/list')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      const specializations = response.body.data.specializations;
+      expect(specializations).not.toContain('Inactive Specialty');
+    });
+
+    it('should handle server errors gracefully', async () => {
+      // Mock HealthcareProfessional.distinct to throw an error
+      const originalDistinct = require('../../../models/HealthcareProfessional').distinct;
+      require('../../../models/HealthcareProfessional').distinct = jest.fn().mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app)
+        .get('/api/hospitals/specializations/list')
+        .set('Cookie', [`token=${managerToken}`])
+        .expect(500);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Server error while fetching specializations');
+
+      // Restore original function
+      require('../../../models/HealthcareProfessional').distinct = originalDistinct;
+    });
+  });
+
   describe('Edge Cases', () => {
     it('should handle hospitals with many departments', async () => {
       const departments = Array(50).fill(null).map((_, i) => `Department ${i + 1}`);
       const hospitalData = {
         name: 'Large Hospital',
-        type: 'general',
+        type: 'public',
         address: {
           street: '999 Big St',
           city: 'Colombo',
-          zipCode: '10000',
+          state: 'Western',
+          zipCode: '10000'
         },
         contactInfo: {
           phone: '+94118888888',
           email: 'large@hospital.lk',
         },
+        capacity: { totalBeds: 100 },
         departments,
       };
 
@@ -484,16 +1235,18 @@ describe('Hospitals Routes', () => {
       const longName = 'The '.repeat(50) + 'Hospital';
       const hospitalData = {
         name: longName,
-        type: 'general',
+        type: 'public',
         address: {
           street: '123 Long St',
           city: 'Colombo',
-          zipCode: '10000',
+          state: 'Western',
+          zipCode: '10000'
         },
         contactInfo: {
           phone: '+94117777777',
           email: 'long@hospital.lk',
         },
+        capacity: { totalBeds: 100 }
       };
 
       const response = await request(app)
@@ -508,15 +1261,18 @@ describe('Hospitals Routes', () => {
 
     it('should handle concurrent hospital creations', async () => {
       const hospitalData = {
-        type: 'clinic',
+        type: 'public',
         address: {
           street: '123 Test St',
           city: 'Colombo',
-          zipCode: '10000',
+          state: 'Western',
+          zipCode: '10000'
         },
         contactInfo: {
           phone: '+94116666666',
+          email: 'test@hospital.lk'
         },
+        capacity: { totalBeds: 100 }
       };
 
       const promises = Array(5).fill(null).map((_, i) =>
@@ -526,10 +1282,6 @@ describe('Hospitals Routes', () => {
           .send({
             ...hospitalData,
             name: `Concurrent Hospital ${i}`,
-            contactInfo: {
-              ...hospitalData.contactInfo,
-              email: `hospital${i}@test.lk`,
-            },
           })
       );
 
@@ -544,16 +1296,18 @@ describe('Hospitals Routes', () => {
     it('should handle special characters in hospital data', async () => {
       const hospitalData = {
         name: 'St. Mary\'s & Children\'s Hospital',
-        type: 'general',
+        type: 'public',
         address: {
           street: '123 O\'Connor St',
           city: 'Colombo',
-          zipCode: '10000',
+          state: 'Western',
+          zipCode: '10000'
         },
         contactInfo: {
           phone: '+94115555555',
           email: 'info@stmarys.lk',
         },
+        capacity: { totalBeds: 100 }
       };
 
       const response = await request(app)
